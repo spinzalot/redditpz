@@ -113,7 +113,7 @@
   const CLIENT_ID = '971118752046-16hom4b3b76gqamdhhi7tjahdjb8ri59.apps.googleusercontent.com';
   const PROFILE_IMG = id => 'https://cdn.sourdoughrides.com/' + id + '/full_graph.svg';
 
-  let token = null, me = null, progress = null, selCell = null;
+  let token = null, me = null, progress = null, selCell = null, showDone = false;
   const $ = id => document.getElementById(id);
 
   // ----- Sign-in -----
@@ -217,11 +217,18 @@
     $('pSummary').innerHTML = h;
   }
 
-  function pickCell(len, type) {
+  function pickCell(len, type, keepScroll) {
     selCell = len + '|' + type; renderProgress();
-    const cs = progress.classes.filter(c => c.len === len && c.type === type)
+    const all = progress.classes.filter(c => c.len === len && c.type === type);
+    const doneCount = all.filter(c => c.done).length;
+    const cs = all.filter(c => showDone || !c.done)
       .sort((a, b) => (a.done - b.done) || (b.air - a.air));
-    let h = '<h3 style="margin-top:0">' + len + ' min ' + type + '</h3><div class="list">';
+    let h = '<h3 style="margin-top:0">' + len + ' min ' + type + '</h3>' +
+            '<div class="toggle" style="margin:0 0 8px"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
+            ' onchange="showDone=this.checked; pickCell(' + len + ',\'' + type + '\', true)">' +
+            '<label for="lShowDone" style="margin:0">Show rides I\'ve done (' + doneCount + ')</label></div>';
+    if (!cs.length) h += '<p class="muted">All done in this cell! 🎉</p>';
+    h += '<div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
@@ -231,7 +238,7 @@
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
     $('pList').innerHTML = h; $('pList').classList.remove('hidden');
-    $('pList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!keepScroll) $('pList').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // ----- Sync -----
