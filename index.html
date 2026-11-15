@@ -86,6 +86,8 @@
         <select id="pChallenge" onchange="loadProgress()"></select>
         <div class="toggle"><input type="checkbox" id="pRetired" onchange="loadProgress()">
           <label for="pRetired" style="margin:0">Include retired classes I've done</label></div>
+        <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="loadProgress()">
+          <label for="pPrograms" style="margin:0">Include program rides</label></div>
       </div>
       <div class="card" id="pSummary"><span class="muted">Loading...</span></div>
       <div class="card hidden" id="pList"></div>
@@ -190,7 +192,8 @@
     clearError(); selCell = null; $('pList').classList.add('hidden');
     $('pSummary').innerHTML = '<span class="muted">Loading...</span>';
     try {
-      progress = await api('progress', { challengeId: $('pChallenge').value, includeRetired: $('pRetired').checked });
+      progress = await api('progress', { challengeId: $('pChallenge').value, includeRetired: $('pRetired').checked,
+                                          includePrograms: $('pPrograms').checked });
       renderProgress();
     } catch (e) { $('pSummary').innerHTML = ''; showError(e); }
   }
@@ -232,7 +235,7 @@
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
-           '<div class="muted">Aired ' + aired + (c.retired ? ' · retired' : '') + '</div>' +
+           '<div class="muted">' + (c.program ? 'Program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
            (c.done ? '' : '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()">') +
            '</div>';
     });
