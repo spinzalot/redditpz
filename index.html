@@ -41,7 +41,12 @@
     .list .item:first-child { border-top:none; }
     .list .title { font-weight:600; }
     .list .done { color:var(--done); }
-    .list img { width:100%; max-height:120px; object-fit:contain; margin-top:6px; background:#fff; }
+    .list img { width:100%; max-height:120px; object-fit:contain; margin-top:6px; background:#fff; cursor:zoom-in; }
+    #zoom { position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:50; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; padding:16px; cursor:zoom-out; }
+    #zoom img { max-width:100%; max-height:80vh; background:#fff; border-radius:8px; padding:8px; }
+    #zoom .cap { color:#fff; margin-top:12px; font-size:15px; text-align:center; }
+    #zoom .x { position:absolute; top:12px; right:16px; color:#fff; font-size:32px; line-height:1; background:none; border:none; }
     pre { white-space:pre-wrap; font-size:13px; background:#f3f3f5; padding:10px; border-radius:8px; }
     .error { color:var(--accent); }
     ol { padding-left:20px; } ol li { margin-bottom:6px; }
@@ -236,7 +241,8 @@
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
            '<div class="muted">' + (c.program ? 'Program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
-           (c.done ? '' : '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()">') +
+           (c.done ? '' : '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
+                          ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -262,6 +268,19 @@
     } catch (e) { $('sOut').textContent = ''; showError(e); }
     finally { $('sBtn').disabled = false; }
   }
+
+  // ----- Zoomed ride profile -----
+  function zoomImg(img) {
+    closeZoom();
+    const z = document.createElement('div');
+    z.id = 'zoom';
+    z.innerHTML = '<button class="x" aria-label="Close">×</button><img alt="Ride profile" src="' + img.src + '">' +
+                  '<div class="cap">' + esc(img.dataset.cap || '') + '</div>';
+    z.onclick = closeZoom;
+    document.body.appendChild(z);
+  }
+  function closeZoom() { const z = $('zoom'); if (z) z.remove(); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
 
   function esc(s) { return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
 </script>
