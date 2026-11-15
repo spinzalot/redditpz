@@ -85,7 +85,27 @@
   <section id="vApp" class="hidden">
     <div class="tabs">
       <button id="tProgress" class="on" onclick="showTab('Progress')">Progress</button>
-      <button id="tSync" onclick="showTab('Sync')">Sync workouts</button>
+      <button id="tBuddies" onclick="showTab('Buddies')">Buddies</button>
+      <button id="tSync" onclick="showTab('Sync')">Sync</button>
+    </div>
+
+    <div id="pBuddies" class="hidden">
+      <div class="card">
+        <div class="toggle" style="margin-top:0"><input type="checkbox" id="bOptIn">
+          <label for="bOptIn" style="margin:0">Show me in the buddy finder (and let me see others who opted in)</label></div>
+        <label for="bDiscord">My Discord username (for @mentions)</label>
+        <input id="bDiscord" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. spinzalot88">
+        <p style="margin-bottom:0"><button id="bSave" onclick="saveSettings()">Save</button> <span class="muted" id="bSaved"></span></p>
+      </div>
+      <div class="card">
+        <label for="bChallenge" style="margin-top:0">Challenge</label>
+        <select id="bChallenge" onchange="loadBuddies()"></select>
+        <label for="bBuddy">Riding with</label>
+        <select id="bBuddy" onchange="loadBuddies()"><option value="">Anyone</option></select>
+        <label for="bWhen">Ride time for Discord posts</label>
+        <input id="bWhen" type="datetime-local" style="width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px">
+      </div>
+      <div class="card" id="bList"><span class="muted">Loading...</span></div>
     </div>
 
     <div id="pProgress">
@@ -187,16 +207,20 @@
   // ----- App -----
   function enterApp() {
     $('vApp').classList.remove('hidden');
-    $('pChallenge').innerHTML = me.challenges.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+    const opts = me.challenges.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+    $('pChallenge').innerHTML = opts;
+    $('bChallenge').innerHTML = opts;
+    $('bWhen').value = defaultRideTime();
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
     if (!me.rider.lastSync) showTab('Sync'); else loadProgress();
   }
   function showTab(name) {
-    ['Progress', 'Sync'].forEach(n => {
+    ['Progress', 'Buddies', 'Sync'].forEach(n => {
       $('p' + n).classList.toggle('hidden', n !== name);
       $('t' + n).classList.toggle('on', n === name);
     });
     if (name === 'Progress') loadProgress();
+    if (name === 'Buddies') { fillSettings(); loadBuddies(); }
   }
 
   async function loadProgress() {
@@ -273,6 +297,92 @@
       me.rider.lastSync = new Date().toISOString();
     } catch (e) { $('sOut').textContent = ''; showError(e); }
     finally { $('sBtn').disabled = false; }
+  }
+
+  // ----- Buddies -----
+  let buddies = null;
+
+  function fillSettings() {
+    $('bOptIn').checked = !!me.rider.buddyOptIn;
+    $('bDiscord').value = me.rider.discordName || '';
+    $('bSaved').textContent = '';
+  }
+
+  async function saveSettings() {
+    clearError(); $('bSave').disabled = true;
+    try {
+      me = await api('settings', { discordName: $('bDiscord').value, buddyOptIn: $('bOptIn').checked });
+      $('bSaved').textContent = 'Saved.';
+      loadBuddies();
+    } catch (e) { showError(e); } finally { $('bSave').disabled = false; }
+  }
+
+  async function loadBuddies() {
+    clearError();
+    $('bList').innerHTML = '<span class="muted">Loading...</span>';
+    try {
+      const keep = $('bBuddy').value;
+      buddies = await api('buddies', { challengeId: $('bChallenge').value, buddy: keep,
+                                       includePrograms: $('pPrograms').checked });
+      $('bBuddy').innerHTML = '<option value="">Anyone</option>' +
+        buddies.riders.map(r => '<option value="' + esc(r.username) + '"' + (r.username === keep ? ' selected' : '') + '>' +
+                                 esc(r.username) + '</option>').join('');
+      renderBuddies();
+    } catch (e) { $('bList').innerHTML = ''; showError(e); }
+  }
+
+  function renderBuddies() {
+    const b = buddies;
+    let h = '';
+    if (!b.optedIn) {
+      h += '<p class="muted">Turn on <b>Show me in the buddy finder</b> above to see which riders still need your remaining classes.</p>';
+    } else if (!b.riders.length) {
+      h += '<p class="muted">No other riders have opted in yet.</p>';
+    }
+    h += '<p class="muted">' + b.classes.length + ' class' + (b.classes.length === 1 ? '' : 'es') +
+         ($('bBuddy').value ? ' you and ' + esc($('bBuddy').value) + ' both still need.' : ' you still need.') + '</p>';
+    h += '<div class="list">';
+    b.classes.forEach((c, i) => {
+      const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      h += '<div class="item"><div class="title">' + esc(c.title) + '</div>' +
+           '<div class="muted">' + (c.program ? 'Program ride · released ' : 'Aired ') + aired + '</div>' +
+           (b.optedIn ? '<div style="margin-top:4px">' + (c.buddies.length
+              ? '👥 Also needs it: ' + c.buddies.map(esc).join(', ')
+              : '<span class="muted">No opted-in buddies need this one.</span>') + '</div>' : '') +
+           '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
+           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
+           '<div style="margin-top:6px"><button style="font-size:14px;padding:6px 12px" onclick="copyPost(' + i + ', this)">Copy for Discord</button></div>' +
+           '</div>';
+    });
+    h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
+    $('bList').innerHTML = h;
+  }
+
+  function defaultRideTime() {
+    const d = new Date(); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1);
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  async function copyPost(i, btn) {
+    const c = buddies.classes[i];
+    const when = $('bWhen').value ? Math.floor(new Date($('bWhen').value).getTime() / 1000) : null;
+    if (!when) return showError(new Error('Pick a ride time first.'));
+    const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const discordOf = u => (buddies.riders.find(r => r.username === u) || {}).discord;
+    const names = c.buddies.map(u => discordOf(u) ? '@' + discordOf(u) : u);
+    const lines = [
+      '🚴 Ride buddy call: ' + c.title + (c.instructor ? ' with ' + c.instructor : '') +
+        ' (' + (c.program ? 'program ride' : 'aired ' + aired) + ')',
+      '⏰ <t:' + when + ':F> (<t:' + when + ':R>)'
+    ];
+    if (names.length) lines.push('👥 ' + names.join(' ') + ' you still need this one too!');
+    lines.push('https://members.onepeloton.com/classes/cycling?modal=classDetailsModal&classId=' + c.id);
+    lines.push('#redditPZ');
+    const text = lines.join('\n');
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied! Paste in #ride-buddies'; }
+    catch (e) { prompt('Copy this post:', text); }
+    setTimeout(() => { btn.textContent = 'Copy for Discord'; }, 2500);
   }
 
   async function copyWorkoutsLink(btn) {
