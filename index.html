@@ -101,7 +101,10 @@
     <div id="pSync" class="hidden">
       <div class="card">
         <ol>
-          <li>Open <a href="https://members.onepeloton.com/profile/workouts" target="_blank" rel="noopener">your Peloton workouts page</a> (on a phone, switch the browser to its desktop site if needed).</li>
+          <li>Open <a href="https://members.onepeloton.com/profile/workouts" target="_blank" rel="noopener">your Peloton workouts page</a>.
+            <div class="muted" style="margin-top:4px">On a phone, tapping the link may open the Peloton app instead.
+              <button type="button" style="font-size:13px;padding:4px 8px" onclick="copyWorkoutsLink(this)">Copy link</button>
+              and paste it into Safari's or Chrome's address bar. Switch to the desktop site if the button below is missing.</div></li>
           <li>Tap <b>Download Workouts</b>. On iPhone the file lands in Files &rsaquo; Downloads or Files &rsaquo; Chrome.</li>
           <li>Pick that file below and tap <b>Sync</b>.</li>
         </ol>
@@ -267,6 +270,13 @@
       me.rider.lastSync = new Date().toISOString();
     } catch (e) { $('sOut').textContent = ''; showError(e); }
     finally { $('sBtn').disabled = false; }
+  }
+
+  async function copyWorkoutsLink(btn) {
+    const url = 'https://members.onepeloton.com/profile/workouts';
+    try { await navigator.clipboard.writeText(url); btn.textContent = 'Copied!'; }
+    catch (e) { prompt('Copy this link:', url); }
+    setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
   }
 
   // ----- Zoomed ride profile -----
