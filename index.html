@@ -86,6 +86,10 @@
 
   <!-- App -->
   <section id="vApp" class="hidden">
+    <div class="card" style="padding:12px 16px">
+      <label for="cChallenge" style="margin-top:0">Challenge</label>
+      <select id="cChallenge" onchange="challengeChanged()"></select>
+    </div>
     <div class="tabs">
       <button id="tProgress" class="on" onclick="showTab('Progress')">Progress</button>
       <button id="tBuddies" onclick="showTab('Buddies')">Buddies</button>
@@ -114,9 +118,7 @@
         <p style="margin-bottom:0"><button id="bSave" onclick="saveSettings()">Save</button> <span class="muted" id="bSaved"></span></p>
       </div>
       <div class="card">
-        <label for="bChallenge" style="margin-top:0">Challenge</label>
-        <select id="bChallenge" onchange="loadBuddies()"></select>
-        <label>Riding with</label>
+        <label style="margin-top:0">Riding with</label>
         <div id="bBuddies" class="chips"></div>
         <div class="muted" style="font-size:13px;margin-top:4px">Tap riders to show only classes you all still need.</div>
         <label for="bWhen">Ride time for Discord posts</label>
@@ -127,13 +129,12 @@
 
     <div id="pProgress">
       <div class="card">
-        <label for="pChallenge" style="margin-top:0">Challenge</label>
-        <select id="pChallenge" onchange="loadProgress()"></select>
-        <div class="toggle"><input type="checkbox" id="pRetired" onchange="loadProgress()">
+        <div class="toggle" style="margin-top:0"><input type="checkbox" id="pRetired" onchange="savePrefs(); loadProgress()">
           <label for="pRetired" style="margin:0">Include retired classes I've done</label></div>
-        <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="loadProgress()">
+        <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="savePrefs(); loadProgress()">
           <label for="pPrograms" style="margin:0">Include program rides</label></div>
       </div>
+      <div class="card hidden" id="pSynced"></div>
       <div class="card" id="pSummary"><span class="muted">Loading...</span></div>
       <div class="card hidden" id="pList"></div>
     </div>
@@ -151,7 +152,7 @@
         <input type="file" id="sFile" accept=".csv,text/csv">
         <p><button class="primary" id="sBtn" onclick="sync()">Sync</button></p>
         <p class="muted" id="sLast"></p>
-        <pre id="sOut" class="hidden"></pre>
+        <details id="sDetails" class="muted hidden"><summary>Technical details of the last sync</summary><pre id="sOut"></pre></details>
       </div>
     </div>
   </section>
@@ -164,6 +165,10 @@
   const PROFILE_IMG = id => 'https://cdn.sourdoughrides.com/' + id + '/full_graph.svg';
 
   let token = null, me = null, progress = null, selCell = null, showDone = false;
+  let buddies = null, shown = [];
+  const picked = new Set();
+  const CAN_SHARE = !!navigator.share && matchMedia('(pointer: coarse)').matches;   // phones and tablets
+  const POST_LABEL = CAN_SHARE ? 'Share to Discord' : 'Copy for Discord';
   const $ = id => document.getElementById(id);
 
   // ----- Sign-in -----
@@ -224,14 +229,37 @@
   // ----- App -----
   function enterApp() {
     $('vApp').classList.remove('hidden');
-    const opts = me.challenges.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
-    $('pChallenge').innerHTML = opts;
-    $('bChallenge').innerHTML = opts;
+    $('cChallenge').innerHTML = me.challenges.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+    applyPrefs();
     $('bWhen').value = defaultRideTime();
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
     if (!me.rider.lastSync) showTab('Sync'); else loadProgress();
   }
+  let currentTab = 'Progress';
+  function challengeChanged() {
+    savePrefs();
+    if (currentTab === 'Progress') loadProgress();
+    if (currentTab === 'Buddies') loadBuddies();
+  }
+
+  // ----- Remembered settings (this browser only) -----
+  function loadPrefs() { try { return JSON.parse(localStorage.getItem('rpzPrefs') || '{}'); } catch (e) { return {}; } }
+  function savePrefs() {
+    const prefs = { challenge: $('cChallenge').value, retired: $('pRetired').checked, programs: $('pPrograms').checked,
+                    showDone: showDone, picked: [...picked] };
+    try { localStorage.setItem('rpzPrefs', JSON.stringify(prefs)); } catch (e) {}
+  }
+  function applyPrefs() {
+    const p = loadPrefs();
+    if (p.challenge && me.challenges.some(c => c.id === p.challenge)) $('cChallenge').value = p.challenge;
+    if (typeof p.retired === 'boolean') $('pRetired').checked = p.retired;
+    if (typeof p.programs === 'boolean') $('pPrograms').checked = p.programs;
+    if (typeof p.showDone === 'boolean') showDone = p.showDone;
+    (p.picked || []).forEach(u => picked.add(u));
+  }
+
   function showTab(name) {
+    currentTab = name;
     ['Progress', 'Buddies', 'Sync'].forEach(n => {
       $('p' + n).classList.toggle('hidden', n !== name);
       $('t' + n).classList.toggle('on', n === name);
@@ -244,7 +272,7 @@
     clearError(); selCell = null; $('pList').classList.add('hidden');
     $('pSummary').innerHTML = '<span class="muted">Loading...</span>';
     try {
-      progress = await api('progress', { challengeId: $('pChallenge').value, includeRetired: $('pRetired').checked,
+      progress = await api('progress', { challengeId: $('cChallenge').value, includeRetired: $('pRetired').checked,
                                           includePrograms: $('pPrograms').checked });
       renderProgress();
     } catch (e) { $('pSummary').innerHTML = ''; showError(e); }
@@ -280,7 +308,7 @@
       .sort((a, b) => (a.done - b.done) || (b.air - a.air));
     let h = '<h3 style="margin-top:0">' + len + ' min ' + type + '</h3>' +
             '<div class="toggle" style="margin:0 0 8px"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
-            ' onchange="showDone=this.checked; pickCell(' + len + ',\'' + type + '\', true)">' +
+            ' onchange="showDone=this.checked; savePrefs(); pickCell(' + len + ',\'' + type + '\', true)">' +
             '<label for="lShowDone" style="margin:0">Show rides I\'ve done (' + doneCount + ')</label></div>';
     if (!cs.length) h += '<p class="muted">All done in this cell! 🎉</p>';
     h += '<div class="list">';
@@ -305,20 +333,48 @@
     const expected = (me.rider.pelotonUsername + '_workouts').toLowerCase();
     if (f.name.toLowerCase().indexOf(expected) !== 0 &&
         !confirm('This file is named "' + f.name + '", not ' + me.rider.pelotonUsername + '_workouts.csv. Sync it anyway?')) return;
-    $('sBtn').disabled = true; $('sOut').classList.remove('hidden'); $('sOut').textContent = 'Syncing... this can take up to a minute.';
+    $('sBtn').disabled = true; $('sBtn').textContent = 'Syncing... up to a minute';
     try {
-      const text = await f.text();
+      const [text, before] = await Promise.all([f.text(), doneSnapshot()]);
       const r = await api('sync', { csvText: text });
-      $('sOut').textContent = r.report;
+      const after = await doneSnapshot();
+      $('sOut').textContent = r.report; $('sDetails').classList.remove('hidden');
       $('sLast').textContent = 'Last synced: ' + new Date().toLocaleString();
       me.rider.lastSync = new Date().toISOString();
-    } catch (e) { $('sOut').textContent = ''; showError(e); }
-    finally { $('sBtn').disabled = false; }
+      showSyncResult(before, after);
+      showTab('Progress');
+    } catch (e) { showError(e); }
+    finally { $('sBtn').disabled = false; $('sBtn').textContent = 'Sync'; }
+  }
+
+  // Done class IDs per challenge (everything counted: retired and program rides included).
+  async function doneSnapshot() {
+    const snap = {};
+    await Promise.all(me.challenges.map(async c => {
+      const p = await api('progress', { challengeId: c.id, includeRetired: true, includePrograms: true });
+      snap[c.id] = { ids: new Set(p.classes.filter(x => x.done).map(x => x.id)), classes: p.classes };
+    }));
+    return snap;
+  }
+
+  function showSyncResult(before, after) {
+    let n = 0, body = '';
+    me.challenges.forEach(c => {
+      const b = before[c.id], a = after[c.id];
+      if (!a) return;
+      const fresh = a.classes.filter(x => x.done && !(b && b.ids.has(x.id)));
+      if (!fresh.length) return;
+      n += fresh.length;
+      body += '<div class="muted" style="margin-top:8px">' + esc(c.name) + '</div>' +
+              fresh.map(x => '<div><span class="done">✓</span> ' + esc(x.title) + '</div>').join('');
+    });
+    $('pSynced').innerHTML = '<div class="row" style="justify-content:space-between"><b>' +
+      (n ? 'Synced: ' + n + ' new ride' + (n === 1 ? '' : 's') + ' counted 🎉' : 'Synced: no new challenge rides since last time.') +
+      '</b><button style="font-size:13px;padding:4px 10px" onclick="$(\'pSynced\').classList.add(\'hidden\')">×</button></div>' + body;
+    $('pSynced').classList.remove('hidden');
   }
 
   // ----- Buddies -----
-  let buddies = null, shown = [];
-  const picked = new Set();
 
   function fillSettings() {
     $('bOptIn').checked = !!me.rider.buddyOptIn;
@@ -339,7 +395,7 @@
     clearError();
     $('bList').innerHTML = '<span class="muted">Loading...</span>';
     try {
-      buddies = await api('buddies', { challengeId: $('bChallenge').value, includePrograms: $('pPrograms').checked });
+      buddies = await api('buddies', { challengeId: $('cChallenge').value, includePrograms: $('pPrograms').checked });
       [...picked].forEach(u => { if (!buddies.riders.some(r => r.username === u)) picked.delete(u); });
       renderChips();
       renderBuddies();
@@ -355,7 +411,7 @@
   function toggleBuddy(i) {
     const u = buddies.riders[i].username;
     picked.has(u) ? picked.delete(u) : picked.add(u);
-    renderChips(); renderBuddies();
+    savePrefs(); renderChips(); renderBuddies();
   }
 
   function renderBuddies() {
@@ -380,7 +436,7 @@
               : '<span class="muted">No opted-in buddies need this one.</span>') + '</div>' : '') +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
-           '<div style="margin-top:6px"><button style="font-size:14px;padding:6px 12px" onclick="copyPost(' + i + ', this)">Copy for Discord</button></div>' +
+           '<div style="margin-top:6px"><button style="font-size:14px;padding:6px 12px" onclick="copyPost(' + i + ', this)">' + POST_LABEL + '</button></div>' +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -422,9 +478,13 @@
     lines.push('https://members.onepeloton.com/classes/cycling?modal=classDetailsModal&classId=' + c.id);
     lines.push('#redditPZ');
     const text = lines.join('\n');
+    if (CAN_SHARE) {
+      try { await navigator.share({ text: text }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }   // cancelled; any other failure falls back to copying
+    }
     try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied! Paste in #ride-buddies'; }
     catch (e) { prompt('Copy this post:', text); }
-    setTimeout(() => { btn.textContent = 'Copy for Discord'; }, 2500);
+    setTimeout(() => { btn.textContent = POST_LABEL; }, 2500);
   }
 
   async function copyWorkoutsLink(btn) {
