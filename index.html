@@ -337,17 +337,15 @@
         !confirm('This file is named "' + f.name + '", not ' + me.rider.pelotonUsername + '_workouts.csv. Sync it anyway?')) return;
     $('sBtn').disabled = true; $('sBtn').textContent = 'Syncing... up to a minute';
     try {
-      const [text, before] = await Promise.all([f.text(), doneSnapshot()]);
-      const slim = slimWorkouts(text);
-      const r = await api('sync', { csvText: slim.csv });
-      const after = await doneSnapshot();
+      const slim = slimWorkouts(await f.text());
+      const r = await api('sync', { csvText: slim.csv });   // one trip: sync + what's new + refreshed profile
       $('sOut').textContent = 'Sent ' + slim.kept + ' of ' + slim.total + ' workouts in the file (' +
         (slim.full ? 'full history' : 'cycling rides from a week before your newest stored ride') + ').\n\n' + r.report;
       $('sDetails').classList.remove('hidden');
-      me = await api('me');   // refresh last sync, newest ride and challenge dates
+      me = r.me || await api('me');   // older back end: fetch the profile separately
       $('sLast').textContent = 'Last synced: ' + new Date(me.rider.lastSync || Date.now()).toLocaleString();
       checkSyncPrompt();
-      showSyncResult(before, after);
+      showSyncResult(r.newly || []);
       showTab('Progress');
     } catch (e) { showError(e); }
     finally { $('sBtn').disabled = false; $('sBtn').textContent = 'Sync'; }
@@ -416,26 +414,12 @@
     $('pSyncPrompt').classList.remove('hidden');
   }
 
-  // Done class IDs per challenge (everything counted: retired and program rides included).
-  async function doneSnapshot() {
-    const snap = {};
-    await Promise.all(me.challenges.map(async c => {
-      const p = await api('progress', { challengeId: c.id, includeRetired: true, includePrograms: true });
-      snap[c.id] = { ids: new Set(p.classes.filter(x => x.done).map(x => x.id)), classes: p.classes };
-    }));
-    return snap;
-  }
-
-  function showSyncResult(before, after) {
+  function showSyncResult(newly) {
     let n = 0, body = '';
-    me.challenges.forEach(c => {
-      const b = before[c.id], a = after[c.id];
-      if (!a) return;
-      const fresh = a.classes.filter(x => x.done && !(b && b.ids.has(x.id)));
-      if (!fresh.length) return;
-      n += fresh.length;
-      body += '<div class="muted" style="margin-top:8px">' + esc(c.name) + '</div>' +
-              fresh.map(x => '<div><span class="done">✓</span> ' + esc(x.title) + '</div>').join('');
+    newly.forEach(g => {
+      n += g.titles.length;
+      body += '<div class="muted" style="margin-top:8px">' + esc(g.challenge) + '</div>' +
+              g.titles.map(t => '<div><span class="done">✓</span> ' + esc(t) + '</div>').join('');
     });
     $('pSynced').innerHTML = '<div class="row" style="justify-content:space-between"><b>' +
       (n ? 'Synced: ' + n + ' new ride' + (n === 1 ? '' : 's') + ' counted 🎉' : 'Synced: no new challenge rides since last time.') +
