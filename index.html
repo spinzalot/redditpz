@@ -40,6 +40,9 @@
     .grid td.cell.complete { background:#e8f5e9; color:var(--done); font-weight:600; }
     .grid td.cell.sel { outline:2px solid var(--ink); outline-offset:-2px; }
     .grid td.empty { color:#bbb; }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; }
+    .chips button { font-size:14px; padding:6px 12px; border-radius:16px; }
+    .chips button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
     .list .item { border-top:1px solid var(--line); padding:10px 0; }
     .list .item:first-child { border-top:none; }
     .list .title { font-weight:600; }
@@ -100,8 +103,9 @@
       <div class="card">
         <label for="bChallenge" style="margin-top:0">Challenge</label>
         <select id="bChallenge" onchange="loadBuddies()"></select>
-        <label for="bBuddy">Riding with</label>
-        <select id="bBuddy" onchange="loadBuddies()"><option value="">Anyone</option></select>
+        <label>Riding with</label>
+        <div id="bBuddies" class="chips"></div>
+        <div class="muted" style="font-size:13px;margin-top:4px">Tap riders to show only classes you all still need.</div>
         <label for="bWhen">Ride time for Discord posts</label>
         <input id="bWhen" type="datetime-local" style="width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px">
       </div>
@@ -300,7 +304,8 @@
   }
 
   // ----- Buddies -----
-  let buddies = null;
+  let buddies = null, shown = [];
+  const picked = new Set();
 
   function fillSettings() {
     $('bOptIn').checked = !!me.rider.buddyOptIn;
@@ -321,28 +326,39 @@
     clearError();
     $('bList').innerHTML = '<span class="muted">Loading...</span>';
     try {
-      const keep = $('bBuddy').value;
-      buddies = await api('buddies', { challengeId: $('bChallenge').value, buddy: keep,
-                                       includePrograms: $('pPrograms').checked });
-      $('bBuddy').innerHTML = '<option value="">Anyone</option>' +
-        buddies.riders.map(r => '<option value="' + esc(r.username) + '"' + (r.username === keep ? ' selected' : '') + '>' +
-                                 esc(r.username) + '</option>').join('');
+      buddies = await api('buddies', { challengeId: $('bChallenge').value, includePrograms: $('pPrograms').checked });
+      [...picked].forEach(u => { if (!buddies.riders.some(r => r.username === u)) picked.delete(u); });
+      renderChips();
       renderBuddies();
     } catch (e) { $('bList').innerHTML = ''; showError(e); }
   }
 
+  function renderChips() {
+    $('bBuddies').innerHTML = buddies.riders.length
+      ? buddies.riders.map((r, i) => '<button type="button" class="' + (picked.has(r.username) ? 'on' : '') +
+                                     '" onclick="toggleBuddy(' + i + ')">' + esc(r.username) + '</button>').join('')
+      : '<span class="muted">' + (buddies.optedIn ? 'No other riders have opted in yet.' : 'Opt in above to see other riders.') + '</span>';
+  }
+  function toggleBuddy(i) {
+    const u = buddies.riders[i].username;
+    picked.has(u) ? picked.delete(u) : picked.add(u);
+    renderChips(); renderBuddies();
+  }
+
   function renderBuddies() {
     const b = buddies;
+    const sel = [...picked];
+    shown = b.classes.filter(c => sel.every(u => c.buddies.indexOf(u) !== -1));
     let h = '';
     if (!b.optedIn) {
       h += '<p class="muted">Turn on <b>Show me in the buddy finder</b> above to see which riders still need your remaining classes.</p>';
     } else if (!b.riders.length) {
       h += '<p class="muted">No other riders have opted in yet.</p>';
     }
-    h += '<p class="muted">' + b.classes.length + ' class' + (b.classes.length === 1 ? '' : 'es') +
-         ($('bBuddy').value ? ' you and ' + esc($('bBuddy').value) + ' both still need.' : ' you still need.') + '</p>';
+    h += '<p class="muted">' + shown.length + ' class' + (shown.length === 1 ? '' : 'es') +
+         (sel.length ? ' you and ' + sel.map(esc).join(', ') + (sel.length > 1 ? ' all' : '') + ' still need.' : ' you still need.') + '</p>';
     h += '<div class="list">';
-    b.classes.forEach((c, i) => {
+    shown.forEach((c, i) => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + esc(c.title) + '</div>' +
            '<div class="muted">' + (c.program ? 'Program ride · released ' : 'Aired ') + aired + '</div>' +
@@ -365,12 +381,13 @@
   }
 
   async function copyPost(i, btn) {
-    const c = buddies.classes[i];
+    const c = shown[i];
     const when = $('bWhen').value ? Math.floor(new Date($('bWhen').value).getTime() / 1000) : null;
     if (!when) return showError(new Error('Pick a ride time first.'));
     const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     const discordOf = u => (buddies.riders.find(r => r.username === u) || {}).discord;
-    const names = c.buddies.map(u => discordOf(u) ? '@' + discordOf(u) : u);
+    const who = picked.size ? [...picked] : c.buddies;   // mention the chosen group, else everyone who needs it
+    const names = who.map(u => discordOf(u) ? '@' + discordOf(u) : u);
     const lines = [
       '🚴 Ride buddy call: ' + c.title + (c.instructor ? ' with ' + c.instructor : '') +
         ' (' + (c.program ? 'program ride' : 'aired ' + aired) + ')',
