@@ -79,7 +79,7 @@
     <p class="muted">Link your Peloton username once. It must match your Peloton profile exactly.</p>
     <label for="jPeloton">Peloton username</label>
     <input id="jPeloton" type="text" autocomplete="off" autocapitalize="off">
-    <label for="jDiscord">Discord username (optional, for ride-buddy posts)</label>
+    <label for="jDiscord">Discord user ID or username (optional, for ride-buddy posts; you can add it later)</label>
     <input id="jDiscord" type="text" autocomplete="off" autocapitalize="off">
     <p><button class="primary" id="jBtn" onclick="join()">Join</button></p>
   </section>
@@ -96,8 +96,16 @@
       <div class="card">
         <div class="toggle" style="margin-top:0"><input type="checkbox" id="bOptIn">
           <label for="bOptIn" style="margin:0">Show me in the buddy finder (and let me see others who opted in)</label></div>
-        <label for="bDiscord">My Discord username (for @mentions)</label>
-        <input id="bDiscord" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. spinzalot88">
+        <label for="bDiscord">My Discord user ID (or username)</label>
+        <input id="bDiscord" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. 123456789012345678">
+        <details class="muted" style="margin-top:6px"><summary>Why an ID, and how do I find mine?</summary>
+          <p style="margin:6px 0 0">Discord only turns a pasted mention into a real ping when it uses your numeric user ID.
+          With just a username, buddy posts name you but don't notify you.</p>
+          <ol style="margin:6px 0 0">
+            <li>In Discord, open <b>Settings › Advanced</b> and turn on <b>Developer Mode</b>.</li>
+            <li>Tap your profile picture (phone) or right-click your name (computer) and choose <b>Copy User ID</b>.</li>
+            <li>Paste it here and tap <b>Save</b>.</li>
+          </ol></details>
         <p style="margin-bottom:0"><button id="bSave" onclick="saveSettings()">Save</button> <span class="muted" id="bSaved"></span></p>
       </div>
       <div class="card">
@@ -201,7 +209,7 @@
   async function join() {
     clearError(); $('jBtn').disabled = true;
     try {
-      me = await api('join', { pelotonUsername: $('jPeloton').value, discordName: $('jDiscord').value });
+      me = await api('join', { pelotonUsername: $('jPeloton').value, discordName: cleanDiscord($('jDiscord').value) });
       $('vJoin').classList.add('hidden');
       $('whoName').textContent = me.rider.pelotonUsername;
       enterApp();
@@ -316,7 +324,7 @@
   async function saveSettings() {
     clearError(); $('bSave').disabled = true;
     try {
-      me = await api('settings', { discordName: $('bDiscord').value, buddyOptIn: $('bOptIn').checked });
+      me = await api('settings', { discordName: cleanDiscord($('bDiscord').value), buddyOptIn: $('bOptIn').checked });
       $('bSaved').textContent = 'Saved.';
       loadBuddies();
     } catch (e) { showError(e); } finally { $('bSave').disabled = false; }
@@ -374,6 +382,18 @@
     $('bList').innerHTML = h;
   }
 
+  // Accepts "123…", "<@123…>", "@name" or "name"; stores the bare ID or name.
+  function cleanDiscord(v) {
+    const t = String(v || '').trim();
+    const id = t.match(/^<@!?(\d{15,21})>$/);
+    return id ? id[1] : t.replace(/^@+/, '');
+  }
+  // A numeric ID becomes a real Discord mention; a name stays readable text (it won't ping).
+  function mention(discord, pelotonName) {
+    if (!discord) return pelotonName;
+    return /^\d{15,21}$/.test(discord) ? '<@' + discord + '>' : '@' + discord;
+  }
+
   function defaultRideTime() {
     const d = new Date(); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1);
     const p = n => String(n).padStart(2, '0');
@@ -387,7 +407,7 @@
     const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     const discordOf = u => (buddies.riders.find(r => r.username === u) || {}).discord;
     const who = picked.size ? [...picked] : c.buddies;   // mention the chosen group, else everyone who needs it
-    const names = who.map(u => discordOf(u) ? '@' + discordOf(u) : u);
+    const names = who.map(u => mention(discordOf(u), u));
     const lines = [
       '🚴 Ride buddy call: ' + c.title + (c.instructor ? ' with ' + c.instructor : '') +
         ' (' + (c.program ? 'program ride' : 'aired ' + aired) + ')',
