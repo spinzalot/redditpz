@@ -134,6 +134,7 @@
         <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="savePrefs(); loadProgress()">
           <label for="pPrograms" style="margin:0">Include program rides</label></div>
       </div>
+      <div class="card hidden" id="pSyncPrompt"></div>
       <div class="card hidden" id="pSynced"></div>
       <div class="card" id="pSummary"><span class="muted">Loading...</span></div>
       <div class="card hidden" id="pList"></div>
@@ -233,6 +234,7 @@
     applyPrefs();
     $('bWhen').value = defaultRideTime();
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
+    checkSyncPrompt();
     if (!me.rider.lastSync) showTab('Sync'); else loadProgress();
   }
   let currentTab = 'Progress';
@@ -336,15 +338,82 @@
     $('sBtn').disabled = true; $('sBtn').textContent = 'Syncing... up to a minute';
     try {
       const [text, before] = await Promise.all([f.text(), doneSnapshot()]);
-      const r = await api('sync', { csvText: text });
+      const slim = slimWorkouts(text);
+      const r = await api('sync', { csvText: slim.csv });
       const after = await doneSnapshot();
-      $('sOut').textContent = r.report; $('sDetails').classList.remove('hidden');
-      $('sLast').textContent = 'Last synced: ' + new Date().toLocaleString();
-      me.rider.lastSync = new Date().toISOString();
+      $('sOut').textContent = 'Sent ' + slim.kept + ' of ' + slim.total + ' workouts in the file (' +
+        (slim.full ? 'full history' : 'cycling rides from a week before your newest stored ride') + ').\n\n' + r.report;
+      $('sDetails').classList.remove('hidden');
+      me = await api('me');   // refresh last sync, newest ride and challenge dates
+      $('sLast').textContent = 'Last synced: ' + new Date(me.rider.lastSync || Date.now()).toLocaleString();
+      checkSyncPrompt();
       showSyncResult(before, after);
       showTab('Progress');
     } catch (e) { showError(e); }
     finally { $('sBtn').disabled = false; $('sBtn').textContent = 'Sync'; }
+  }
+
+  // ----- Trimming the workouts file on the phone before upload -----
+  const NEED_COLS = ['Workout Timestamp', 'Instructor Name', 'Length (minutes)', 'Fitness Discipline', 'Title', 'Class Timestamp'];
+  const TZ_HOURS = { EDT: -4, EST: -5, CDT: -5, CST: -6, MDT: -6, MST: -7, PDT: -7, PST: -8, HST: -10,
+                     BST: 1, GMT: 0, UTC: 0, CET: 1, CEST: 2 };
+
+  // Challenges added or refreshed since my last sync: older rides may now earn credit.
+  function staleChallenges() {
+    const last = Date.parse(me.rider.lastSync || '');
+    return me.challenges.filter(c => c.refreshedOn && (isNaN(last) || Date.parse(c.refreshedOn) > last));
+  }
+  function needFullSync() { return !me.rider.lastRideAt || staleChallenges().length > 0; }
+
+  // Keeps only cycling rides (and only recent ones unless a full sync is needed) and the six columns matching uses.
+  function slimWorkouts(text) {
+    const rows = parseCsv(text);
+    const head = (rows.shift() || []).map(h => String(h).trim().toLowerCase());
+    const idx = NEED_COLS.map(n => head.indexOf(n.toLowerCase()));
+    if (idx.some(i => i < 0)) return { csv: text, kept: rows.length, total: rows.length, full: true };  // unexpected format: send as is
+    const full = needFullSync();
+    const cutoff = full ? -Infinity : me.rider.lastRideAt - 7 * 86400;
+    const keep = rows.filter(r => r.length > idx[3] && String(r[idx[3]]).trim().toLowerCase() === 'cycling' &&
+                                  (full || (tsEpoch(r[idx[0]]) ?? Infinity) >= cutoff));
+    return { csv: toCsv([NEED_COLS].concat(keep.map(r => idx.map(i => r[i])))), kept: keep.length, total: rows.length, full: full };
+  }
+
+  function parseCsv(text) {
+    const rows = []; let row = [], f = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+        else f += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(f); f = ''; }
+      else if (ch === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+      else if (ch !== '\r') f += ch;
+    }
+    if (f !== '' || row.length) { row.push(f); rows.push(row); }
+    return rows.filter(r => r.some(v => v !== ''));
+  }
+  function toCsv(rows) { return rows.map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\n'); }
+
+  // "2025-10-22 16:30 (-05)" or "(CDT)" -> UTC epoch seconds (close enough for a one-week cutoff).
+  function tsEpoch(s) {
+    const m = String(s || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::\d{2})?\s*(?:\(([^)]+)\))?/);
+    if (!m) return null;
+    const wall = Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) / 1000;
+    const tz = (m[6] || '').trim().toUpperCase();
+    const n = tz.match(/^([+-])?(\d{1,2}):?(\d{2})?$/);
+    const off = n ? (n[1] === '-' ? -1 : 1) * (+n[2] + (+(n[3] || 0)) / 60) : (tz in TZ_HOURS ? TZ_HOURS[tz] : -5);
+    return wall - off * 3600;
+  }
+
+  // Banner on Progress when a challenge changed since my last sync.
+  function checkSyncPrompt() {
+    const stale = me.rider.lastSync ? staleChallenges() : [];
+    if (!stale.length) { $('pSyncPrompt').classList.add('hidden'); return; }
+    $('pSyncPrompt').innerHTML = '📣 <b>' + stale.map(c => esc(c.name)).join(', ') + '</b> ' +
+      (stale.length === 1 ? 'was' : 'were') + ' added or updated since your last sync. Sync to get credit for rides you\'ve already done. ' +
+      '<p style="margin:8px 0 0"><button class="primary" onclick="showTab(\'Sync\')">Sync now</button></p>';
+    $('pSyncPrompt').classList.remove('hidden');
   }
 
   // Done class IDs per challenge (everything counted: retired and program rides included).
