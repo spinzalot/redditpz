@@ -38,6 +38,8 @@
     .grid th { background:#f2f2f5; font-weight:600; }
     .grid td.cell { cursor:pointer; }
     .grid td.cell.complete { background:#e8f5e9; color:var(--done); font-weight:600; }
+    .grid td.cell.manual { background:#f0f0f3; color:#8e8e93; }
+    .grid td.cell { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
     .grid td.cell.sel { outline:2px solid var(--ink); outline-offset:-2px; }
     .grid td.empty { color:#bbb; }
     label.radio { display:flex; align-items:center; gap:6px; margin:0; font-size:15px; }
@@ -356,26 +358,58 @@
       slots.forEach(d => {
         const cs = p.classes.filter(c => c.week === w && c.slot === d);
         if (!cs.length) { h += '<td class="empty">–</td>'; return; }
-        const done = cs.every(c => c.done);
+        const done = cs.every(c => c.done), manual = done && cs.some(c => c.manual);
         const key = 'w' + w + '|' + d;
-        h += '<td class="cell' + (done ? ' complete' : '') + (selCell === key ? ' sel' : '') +
-             '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
+        h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : '') + (selCell === key ? ' sel' : '') +
+             '" data-week="' + w + '" data-slot="' + esc(d) + '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
              (done ? '✓' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') + '</td>';
       });
       h += '</tr>';
     });
-    h += '</table>';
+    h += '</table><div class="muted" style="font-size:13px;margin-top:6px">Long-press a day (right-click on a computer) to mark it done yourself.</div>';
     $('pSummary').innerHTML = h;
+    $('pSummary').querySelectorAll('td.cell').forEach(td =>
+      onLongPress(td, () => toggleManual(Number(td.dataset.week), td.dataset.slot)));
+  }
+
+  // ----- Long press (phones) / right-click (computers) -----
+  let suppressClick = false;
+  function onLongPress(el, fn) {
+    let timer = null, fired = false;
+    const fire = () => { fired = true; suppressClick = true; setTimeout(() => { suppressClick = false; }, 600); fn(); };
+    el.addEventListener('touchstart', () => { fired = false; timer = setTimeout(fire, 550); }, { passive: true });
+    ['touchend', 'touchmove', 'touchcancel'].forEach(t => el.addEventListener(t, () => clearTimeout(timer)));
+    el.addEventListener('contextmenu', e => { e.preventDefault(); if (!fired) fire(); });
+  }
+
+  // Gray check: count a class as done without a matching ride. A ride-matched (green) class can't be changed.
+  async function toggleManual(week, slot) {
+    const cs = progress.classes.filter(c => c.week === week && c.slot === slot);
+    if (!cs.length) return;
+    if (cs.every(c => c.done && !c.manual)) return toast('Already counted from your rides.');
+    const c = cs.find(x => x.manual) || cs.find(x => !x.done);
+    const mark = !c.manual;
+    c.manual = mark; c.done = mark; progress.done += mark ? 1 : -1;   // show it right away
+    renderProgramGrid();
+    toast(mark ? 'Marked done ✓' : 'Mark removed');
+    try {
+      const r = await api('toggleManual', { challengeId: progress.challenge.id, classId: c.id });
+      if (r.manual !== mark) { c.manual = r.manual; c.done = r.manual; progress.done += r.manual ? 1 : -1; renderProgramGrid(); }
+    } catch (e) {
+      c.manual = !mark; c.done = !mark; progress.done += mark ? -1 : 1; renderProgramGrid();
+      showError(e);
+    }
   }
 
   function pickSlot(week, slot) {
+    if (suppressClick) return;
     selCell = 'w' + week + '|' + slot; renderProgramGrid();
     const cs = progress.classes.filter(c => c.week === week && c.slot === slot);
     let h = '<h3 style="margin-top:0">Week ' + week + ' · ' + esc(slot) + '</h3><div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
-           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + '</div>' +
+      h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') : '') + esc(c.title) + '</div>' +
+           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + (c.manual ? ' · marked done by you' : '') + '</div>' +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
            classButtons(c.id) +
