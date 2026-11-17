@@ -549,8 +549,13 @@
     const friendsOnly = $('bFriendsOnly').checked;
     const friendSet = new Set(b.riders.filter(r => r.friend).map(r => r.username));
     const names = c => friendsOnly ? c.buddies.filter(u => friendSet.has(u)) : c.buddies;
+    const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
+    const isProgram = ch.kind === 'Program' && b.classes.some(c => c.week);
+    const dayIdx = d => (DAY_ORDER.indexOf(d) + 1) || 99;
     shown = b.classes.filter(c => sel.every(u => c.buddies.indexOf(u) !== -1))
-      .sort((x, y) => (names(y).length - names(x).length) || (y.air - x.air));
+      .sort(isProgram
+        ? (x, y) => ((x.week || 99) - (y.week || 99)) || (dayIdx(x.slot) - dayIdx(y.slot))   // program order: week, then day
+        : (x, y) => (names(y).length - names(x).length) || (y.air - x.air));
     let h = '';
     if (!b.riders.length) h += '<p class="muted">No other riders are sharing with you yet.</p>';
     h += '<p class="muted">' + shown.length + ' class' + (shown.length === 1 ? '' : 'es') +
@@ -558,8 +563,9 @@
     h += '<div class="list">';
     shown.forEach((c, i) => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item"><div class="title">' + esc(c.title) + '</div>' +
-           '<div class="muted">' + (c.program ? 'Program ride · released ' : 'Aired ') + aired + '</div>' +
+      h += '<div class="item">' + (isProgram && c.week ? '<div class="muted"><b>Week ' + c.week + ' · ' + esc(c.slot) + '</b></div>' : '') +
+           '<div class="title">' + esc(c.title) + '</div>' +
+           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Program ride · released ' : 'Aired ') + aired + '</div>' +
            (b.riders.length ? '<div style="margin-top:4px">' + (names(c).length
               ? '👥 Also needs it: ' + names(c).map(esc).join(', ') +
                 (friendsOnly && c.buddies.length > names(c).length ? ' <span class="muted">(+' + (c.buddies.length - names(c).length) + ' others)</span>' : '')
