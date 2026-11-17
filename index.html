@@ -41,6 +41,9 @@
     .grid td.cell.sel { outline:2px solid var(--ink); outline-offset:-2px; }
     .grid td.empty { color:#bbb; }
     label.radio { display:flex; align-items:center; gap:6px; margin:0; font-size:15px; }
+    .btnrow { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .btnrow button, .btnrow .btn { font-size:13px; padding:6px 10px; border-radius:8px; border:1px solid var(--line);
+                                   background:#fff; color:var(--ink); text-decoration:none; cursor:pointer; line-height:1.2; }
     .chips { display:flex; flex-wrap:wrap; gap:8px; }
     .chips button { font-size:14px; padding:6px 12px; border-radius:16px; }
     .chips button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
@@ -193,7 +196,8 @@
   let buddies = null, shown = [];
   const picked = new Set();
   const CAN_SHARE = !!navigator.share && matchMedia('(pointer: coarse)').matches;   // phones and tablets
-  const POST_LABEL = CAN_SHARE ? 'Share to Discord' : 'Copy for Discord';
+  const POST_LABEL = 'Discord Buddy';
+  const POST_SEND = CAN_SHARE ? 'Share' : 'Copy';
   const $ = id => document.getElementById(id);
 
   // ----- Sign-in -----
@@ -360,6 +364,7 @@
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + '</div>' +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
+           classButtons(c.id) +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -409,6 +414,7 @@
            '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
            (c.done ? '' : '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
+           classButtons(c.id) +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -599,7 +605,7 @@
                                                       : 'No one else sharing with you needs this one.') + '</span>') + '</div>' : '') +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
-           '<div style="margin-top:6px"><button style="font-size:14px;padding:6px 12px" onclick="copyPost(' + i + ')">' + POST_LABEL + '</button></div>' +
+           classButtons(c.id, '<button onclick="copyPost(' + i + ')">' + POST_LABEL + '</button>') +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -699,7 +705,7 @@
       '<label for="whenAt">Or pick a day and time</label>' +
       '<input id="whenAt" type="datetime-local" value="' + (lastWhen || toLocalInput(seven)) + '" oninput="pickWhen(null)"' +
       ' style="width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px">' +
-      '<div class="row" style="margin-top:14px"><button class="primary" onclick="sendPost()">' + POST_LABEL + '</button>' +
+      '<div class="row" style="margin-top:14px"><button class="primary" onclick="sendPost()">' + POST_SEND + '</button>' +
       '<button onclick="closeWhen()">Cancel</button></div></div>';
     box.onclick = closeWhen;
     document.body.appendChild(box);
@@ -749,6 +755,31 @@
     try { await navigator.clipboard.writeText(url); btn.textContent = 'Copied!'; }
     catch (e) { prompt('Copy this link:', url); }
     setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
+  }
+
+  // ----- Per-class buttons: (Discord Buddy) · Peloton app · Timer tool · Copy image -----
+  const PELOTON_CLASS = id => 'https://members.onepeloton.com/classes/all?modal=classDetailsModal&classId=' + id;
+  const TIMER_TOOL = id => 'https://sourdoughrides.com/ride/' + id + '/timer';
+  const PROFILE_PNG = id => 'https://cdn.sourdoughrides.com/' + id + '/full_graph_png.png';
+  function classButtons(id, first) {
+    return '<div class="btnrow">' + (first || '') +
+      '<a class="btn" href="' + PELOTON_CLASS(id) + '" target="_blank" rel="noopener">Peloton app</a>' +
+      '<a class="btn" href="' + TIMER_TOOL(id) + '" target="_blank" rel="noopener">Timer tool</a>' +
+      '<button onclick="copyImage(\'' + id + '\')">Copy image</button></div>';
+  }
+  // Puts the ride graph picture on the clipboard; if the browser or the image host won't allow it, copies its link.
+  async function copyImage(id) {
+    const url = PROFILE_PNG(id);
+    try {
+      if (!window.ClipboardItem) throw new Error('no image clipboard');
+      const blob = fetch(url, { mode: 'cors' }).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+                     .then(b => b.type === 'image/png' ? b : new Blob([b], { type: 'image/png' }));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);   // Safari needs the promise passed in directly
+      toast('Ride graph copied.');
+    } catch (e) {
+      try { await navigator.clipboard.writeText(url); toast('Image link copied. Paste it and Discord shows the graph.'); }
+      catch (e2) { prompt('Copy this image link:', url); }
+    }
   }
 
   // ----- Zoomed ride profile -----
