@@ -301,6 +301,8 @@
   }
 
   const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const TYPE_SHORT = { PZMax: 'PZM' };
+  const shortLabel = c => c.len + (TYPE_SHORT[c.type] || c.type);   // e.g. 45PZE, 60PZ, 30PZM, 60RR
 
   // Program challenges: weeks down the side, days across, a check mark per done class.
   function renderProgramGrid() {
@@ -320,7 +322,8 @@
         const done = cs.every(c => c.done);
         const key = 'w' + w + '|' + d;
         h += '<td class="cell' + (done ? ' complete' : '') + (selCell === key ? ' sel' : '') +
-             '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' + (done ? '✓' : '&nbsp;') + '</td>';
+             '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
+             (done ? '✓' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') + '</td>';
       });
       h += '</tr>';
     });
