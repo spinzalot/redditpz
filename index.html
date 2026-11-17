@@ -48,6 +48,7 @@
     .btnrow svg { flex:none; }
     /* Narrow phones (iPhone 12 and smaller): slimmer margins so the four class buttons fit on one line. */
     @media (max-width: 400px) { main { padding:12px 10px; } .card { padding:14px 12px; } }
+    @media (max-width: 380px) { .btnrow button, .btnrow .btn { padding:7px 6px; font-size:13px; } }
     .chips { display:flex; flex-wrap:wrap; gap:8px; }
     .chips button { font-size:14px; padding:6px 12px; border-radius:16px; }
     .chips button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
@@ -777,7 +778,7 @@
   const PROFILE_PNG = id => 'https://cdn.sourdoughrides.com/' + id + '/full_graph_png.png';
   function classButtons(id, first) {
     return '<div class="btnrow">' + (first || '') +
-      '<a class="btn" href="' + PELOTON_CLASS(id) + '" target="_blank" rel="noopener" title="Open in the Peloton app to stack it">' + ICON.stack + 'Stack</a>' +
+      '<a class="btn" href="' + PELOTON_CLASS(id) + '" target="_blank" rel="noopener" title="Open the class in the Peloton app">' + ICON.stack + 'Peloton</a>' +
       '<a class="btn" href="' + TIMER_TOOL(id) + '" target="_blank" rel="noopener" title="Sourdough timer tool">' + ICON.timer + 'Timer</a>' +
       '<button onclick="copyImage(\'' + id + '\')" title="Copy the ride graph">' + ICON.graph + 'Graph</button></div>';
   }
