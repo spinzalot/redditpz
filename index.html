@@ -42,8 +42,12 @@
     .grid td.empty { color:#bbb; }
     label.radio { display:flex; align-items:center; gap:6px; margin:0; font-size:15px; }
     .btnrow { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px; margin-top:8px; }
-    .btnrow button, .btnrow .btn { font-size:13px; padding:6px 10px; border-radius:8px; border:1px solid var(--line);
-                                   background:#fff; color:var(--ink); text-decoration:none; cursor:pointer; line-height:1.2; }
+    .btnrow button, .btnrow .btn { display:inline-flex; align-items:center; gap:4px; font-size:14px; padding:7px 8px;
+                                   border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--ink);
+                                   text-decoration:none; cursor:pointer; line-height:1.2; white-space:nowrap; }
+    .btnrow svg { flex:none; }
+    /* Narrow phones (iPhone 12 and smaller): slimmer margins so the four class buttons fit on one line. */
+    @media (max-width: 400px) { main { padding:12px 10px; } .card { padding:14px 12px; } }
     .chips { display:flex; flex-wrap:wrap; gap:8px; }
     .chips button { font-size:14px; padding:6px 12px; border-radius:16px; }
     .chips button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
@@ -196,7 +200,16 @@
   let buddies = null, shown = [];
   const picked = new Set();
   const CAN_SHARE = !!navigator.share && matchMedia('(pointer: coarse)').matches;   // phones and tablets
-  const POST_LABEL = 'Discord Buddy';
+  // Line icons for the class buttons (drawn in the button's text color).
+  const svgIcon = d => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"' +
+                       ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+  const ICON = {
+    buddy: svgIcon('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/>'),
+    stack: svgIcon('<path d="M6 17V6a2 2 0 0 1 2-2h11"/><rect x="9" y="7" width="12" height="13" rx="2"/><path d="M13.5 10.8v6.4l4.6-3.2z"/>'),
+    timer: svgIcon('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M10 2h4M19 6l1.5-1.5"/>'),
+    graph: svgIcon('<rect x="8" y="3" width="8" height="4" rx="1"/><path d="M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M7 17l3-4 3 2 4-5"/>')
+  };
+  const POST_LABEL = ICON.buddy + 'Buddy';
   const POST_SEND = CAN_SHARE ? 'Share' : 'Copy';
   const $ = id => document.getElementById(id);
 
@@ -764,9 +777,9 @@
   const PROFILE_PNG = id => 'https://cdn.sourdoughrides.com/' + id + '/full_graph_png.png';
   function classButtons(id, first) {
     return '<div class="btnrow">' + (first || '') +
-      '<a class="btn" href="' + PELOTON_CLASS(id) + '" target="_blank" rel="noopener">Peloton app</a>' +
-      '<a class="btn" href="' + TIMER_TOOL(id) + '" target="_blank" rel="noopener">Timer tool</a>' +
-      '<button onclick="copyImage(\'' + id + '\')">Copy image</button></div>';
+      '<a class="btn" href="' + PELOTON_CLASS(id) + '" target="_blank" rel="noopener" title="Open in the Peloton app to stack it">' + ICON.stack + 'Stack</a>' +
+      '<a class="btn" href="' + TIMER_TOOL(id) + '" target="_blank" rel="noopener" title="Sourdough timer tool">' + ICON.timer + 'Timer</a>' +
+      '<button onclick="copyImage(\'' + id + '\')" title="Copy the ride graph">' + ICON.graph + 'Graph</button></div>';
   }
   // Puts the ride graph picture on the clipboard. Sourdough's image host doesn't let other sites read its
   // images, so the back end fetches the PNG for us. If that fails, the image link is copied instead.
