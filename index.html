@@ -300,7 +300,53 @@
     } catch (e) { $('pSummary').innerHTML = ''; showError(e); }
   }
 
+  const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  // Program challenges: weeks down the side, days across, a check mark per done class.
+  function renderProgramGrid() {
+    const p = progress, pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    const weeks = [...new Set(p.classes.filter(c => c.week).map(c => c.week))].sort((a, b) => a - b);
+    const slots = [...new Set(p.classes.filter(c => c.week).map(c => c.slot))]
+      .sort((a, b) => (DAY_ORDER.indexOf(a) + 1 || 99) - (DAY_ORDER.indexOf(b) + 1 || 99) || String(a).localeCompare(String(b)));
+    let h = '<div class="big">' + p.done + ' / ' + p.total + '</div>' +
+            '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
+            '<div class="muted">' + pct + '% done, ' + (p.total - p.done) + ' to go. Tap a day to see its class.</div>';
+    h += '<table class="grid"><tr><th></th>' + slots.map(d => '<th>' + esc(d) + '</th>').join('') + '</tr>';
+    weeks.forEach(w => {
+      h += '<tr><th>Wk ' + w + '</th>';
+      slots.forEach(d => {
+        const cs = p.classes.filter(c => c.week === w && c.slot === d);
+        if (!cs.length) { h += '<td class="empty">–</td>'; return; }
+        const done = cs.every(c => c.done);
+        const key = 'w' + w + '|' + d;
+        h += '<td class="cell' + (done ? ' complete' : '') + (selCell === key ? ' sel' : '') +
+             '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' + (done ? '✓' : '&nbsp;') + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '</table>';
+    $('pSummary').innerHTML = h;
+  }
+
+  function pickSlot(week, slot) {
+    selCell = 'w' + week + '|' + slot; renderProgramGrid();
+    const cs = progress.classes.filter(c => c.week === week && c.slot === slot);
+    let h = '<h3 style="margin-top:0">Week ' + week + ' · ' + esc(slot) + '</h3><div class="list">';
+    cs.forEach(c => {
+      const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
+           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + '</div>' +
+           '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
+           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
+           '</div>';
+    });
+    h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
+    $('pList').innerHTML = h; $('pList').classList.remove('hidden');
+    $('pList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function renderProgress() {
+    if (progress.challenge && progress.challenge.kind === 'Program' && progress.classes.some(c => c.week)) return renderProgramGrid();
     const p = progress, pct = p.total ? Math.round(100 * p.done / p.total) : 0;
     let h = '<div class="big">' + p.done + ' / ' + p.total + '</div>' +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
