@@ -98,8 +98,13 @@
 
     <div id="pBuddies" class="hidden">
       <div class="card">
-        <div class="toggle" style="margin-top:0"><input type="checkbox" id="bOptIn">
-          <label for="bOptIn" style="margin:0">Show me in the buddy finder (and let me see others who opted in)</label></div>
+        <label style="margin-top:0">Who can see me in the buddy finder</label>
+        <div class="toggle" style="margin-top:4px"><input type="radio" name="bVis" id="bVisE" value="Everyone">
+          <label for="bVisE" style="margin:0">Everyone</label></div>
+        <div class="toggle" style="margin-top:4px"><input type="radio" name="bVis" id="bVisF" value="Friends">
+          <label for="bVisF" style="margin:0">Only people on my friends list</label></div>
+        <div class="toggle" style="margin-top:4px"><input type="radio" name="bVis" id="bVisN" value="Nobody">
+          <label for="bVisN" style="margin:0">Nobody</label></div>
         <label for="bDiscord">My Discord user ID (or username)</label>
         <input id="bDiscord" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. 123456789012345678">
         <details class="muted" style="margin-top:6px"><summary>Why an ID, and how do I find mine?</summary>
@@ -118,7 +123,19 @@
         <p style="margin-bottom:0"><button id="bSave" onclick="saveSettings()">Save</button> <span class="muted" id="bSaved"></span></p>
       </div>
       <div class="card">
-        <label style="margin-top:0">Riding with</label>
+        <details id="fBox"><summary><b>Friends</b> <span class="muted" id="fCount"></span></summary>
+          <p class="muted" style="margin:8px 0">Add riders to filter the buddy finder down to people you ride with.
+            If you choose "Only people on my friends list" above, these are also the people who can see you.</p>
+          <div id="fList" class="chips"></div>
+          <label for="fQ">Add a friend</label>
+          <input id="fQ" type="text" autocomplete="off" autocapitalize="off" placeholder="Search Peloton usernames" oninput="friendSearch()">
+          <div id="fResults" class="list" style="margin-top:6px"></div>
+        </details>
+      </div>
+      <div class="card">
+        <div class="toggle" style="margin-top:0"><input type="checkbox" id="bFriendsOnly" onchange="savePrefs(); renderChips(); renderBuddies()">
+          <label for="bFriendsOnly" style="margin:0">Friends only</label></div>
+        <label>Riding with</label>
         <div id="bBuddies" class="chips"></div>
         <div class="muted" style="font-size:13px;margin-top:4px">Tap riders to show only classes you all still need.</div>
         <label for="bWhen">Ride time for Discord posts</label>
@@ -250,7 +267,7 @@
   function loadPrefs() { try { return JSON.parse(localStorage.getItem('rpzPrefs') || '{}'); } catch (e) { return {}; } }
   function savePrefs() {
     const prefs = { challenge: $('cChallenge').value, retired: $('pRetired').checked, programs: $('pPrograms').checked,
-                    showDone: showDone, picked: [...picked] };
+                    showDone: showDone, picked: [...picked], friendsOnly: $('bFriendsOnly').checked };
     try { localStorage.setItem('rpzPrefs', JSON.stringify(prefs)); } catch (e) {}
   }
   function applyPrefs() {
@@ -260,6 +277,7 @@
     if (typeof p.programs === 'boolean') $('pPrograms').checked = p.programs;
     if (typeof p.showDone === 'boolean') showDone = p.showDone;
     (p.picked || []).forEach(u => picked.add(u));
+    $('bFriendsOnly').checked = p.friendsOnly === true;
   }
 
   function showTab(name) {
@@ -433,7 +451,9 @@
   // ----- Buddies -----
 
   function fillSettings() {
-    $('bOptIn').checked = !!me.rider.buddyOptIn;
+    const vis = me.rider.visibility || 'Nobody';
+    document.querySelectorAll('input[name=bVis]').forEach(el => { el.checked = el.value === vis; });
+    renderFriends();
     $('bDiscord').value = me.rider.discordName || '';
     $('bSaved').textContent = '';
   }
@@ -441,7 +461,9 @@
   async function saveSettings() {
     clearError(); $('bSave').disabled = true;
     try {
-      me = await api('settings', { discordName: cleanDiscord($('bDiscord').value), buddyOptIn: $('bOptIn').checked });
+      const vis = (document.querySelector('input[name=bVis]:checked') || {}).value || 'Nobody';
+      me = await api('settings', { discordName: cleanDiscord($('bDiscord').value), visibility: vis,
+                                   buddyOptIn: vis !== 'Nobody' });   // buddyOptIn: for an older back end
       $('bSaved').textContent = 'Saved.';
       loadBuddies();
     } catch (e) { showError(e); } finally { $('bSave').disabled = false; }
@@ -458,14 +480,19 @@
     } catch (e) { $('bList').innerHTML = ''; showError(e); }
   }
 
-  function renderChips() {
-    $('bBuddies').innerHTML = buddies.riders.length
-      ? buddies.riders.map((r, i) => '<button type="button" class="' + (picked.has(r.username) ? 'on' : '') +
-                                     '" onclick="toggleBuddy(' + i + ')">' + esc(r.username) + '</button>').join('')
-      : '<span class="muted">' + (buddies.optedIn ? 'No other riders have opted in yet.' : 'Opt in above to see other riders.') + '</span>';
+  // Chip candidates: friends who share with me; if I have none yet (and Friends only is off), everyone visible.
+  function chipRiders() {
+    const friends = buddies.riders.filter(r => r.friend);
+    return (friends.length || $('bFriendsOnly').checked) ? friends : buddies.riders;
   }
-  function toggleBuddy(i) {
-    const u = buddies.riders[i].username;
+  function renderChips() {
+    const list = chipRiders();
+    $('bBuddies').innerHTML = list.length
+      ? list.map(r => '<button type="button" class="' + (picked.has(r.username) ? 'on' : '') +
+                      '" onclick="toggleBuddy(\'' + esc(r.username).replace(/\\/g, '') + '\')">' + esc(r.username) + '</button>').join('')
+      : '<span class="muted">' + (buddies.riders.length ? 'Add friends below Settings to pick riders here.' : 'No other riders are sharing with you yet.') + '</span>';
+  }
+  function toggleBuddy(u) {
     picked.has(u) ? picked.delete(u) : picked.add(u);
     savePrefs(); renderChips(); renderBuddies();
   }
@@ -473,13 +500,13 @@
   function renderBuddies() {
     const b = buddies;
     const sel = [...picked];
-    shown = b.classes.filter(c => sel.every(u => c.buddies.indexOf(u) !== -1));
+    const friendsOnly = $('bFriendsOnly').checked;
+    const friendSet = new Set(b.riders.filter(r => r.friend).map(r => r.username));
+    const names = c => friendsOnly ? c.buddies.filter(u => friendSet.has(u)) : c.buddies;
+    shown = b.classes.filter(c => sel.every(u => c.buddies.indexOf(u) !== -1))
+      .sort((x, y) => (names(y).length - names(x).length) || (y.air - x.air));
     let h = '';
-    if (!b.optedIn) {
-      h += '<p class="muted">Turn on <b>Show me in the buddy finder</b> above to see which riders still need your remaining classes.</p>';
-    } else if (!b.riders.length) {
-      h += '<p class="muted">No other riders have opted in yet.</p>';
-    }
+    if (!b.riders.length) h += '<p class="muted">No other riders are sharing with you yet.</p>';
     h += '<p class="muted">' + shown.length + ' class' + (shown.length === 1 ? '' : 'es') +
          (sel.length ? ' you and ' + sel.map(esc).join(', ') + (sel.length > 1 ? ' all' : '') + ' still need.' : ' you still need.') + '</p>';
     h += '<div class="list">';
@@ -487,9 +514,11 @@
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + esc(c.title) + '</div>' +
            '<div class="muted">' + (c.program ? 'Program ride · released ' : 'Aired ') + aired + '</div>' +
-           (b.optedIn ? '<div style="margin-top:4px">' + (c.buddies.length
-              ? '👥 Also needs it: ' + c.buddies.map(esc).join(', ')
-              : '<span class="muted">No opted-in buddies need this one.</span>') + '</div>' : '') +
+           (b.riders.length ? '<div style="margin-top:4px">' + (names(c).length
+              ? '👥 Also needs it: ' + names(c).map(esc).join(', ') +
+                (friendsOnly && c.buddies.length > names(c).length ? ' <span class="muted">(+' + (c.buddies.length - names(c).length) + ' others)</span>' : '')
+              : '<span class="muted">' + (friendsOnly ? 'No friends need this one' + (c.buddies.length ? ' (' + c.buddies.length + ' others do)' : '') + '.'
+                                                      : 'No one else sharing with you needs this one.') + '</span>') + '</div>' : '') +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
            '<div style="margin-top:6px"><button style="font-size:14px;padding:6px 12px" onclick="copyPost(' + i + ', this)">' + POST_LABEL + '</button></div>' +
@@ -497,6 +526,47 @@
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
     $('bList').innerHTML = h;
+  }
+
+  // ----- Friends -----
+  function renderFriends() {
+    const fl = me.friends || [];
+    $('fCount').textContent = fl.length ? '(' + fl.length + ')' : '';
+    $('fList').innerHTML = fl.length
+      ? fl.map(f => '<button type="button" title="Remove" onclick="friendRemove(\'' + esc(f.username) + '\')">' + esc(f.username) +
+                    (f.sharing ? '' : ' <span class="muted">(not sharing)</span>') + ' ×</button>').join('')
+      : '<span class="muted">No friends added yet.</span>';
+  }
+  let fTimer = null;
+  function friendSearch() {
+    clearTimeout(fTimer);
+    const q = $('fQ').value.trim();
+    if (q.length < 2) { $('fResults').innerHTML = ''; return; }
+    fTimer = setTimeout(async () => {
+      try {
+        const r = await api('friendSearch', { q: q });
+        if ($('fQ').value.trim() !== q) return;   // a newer search is on its way
+        $('fResults').innerHTML = r.results.length
+          ? r.results.map(u => '<div class="item row" style="justify-content:space-between"><span>' + esc(u) + '</span>' +
+                               '<button style="font-size:14px;padding:4px 12px" onclick="friendAdd(\'' + esc(u) + '\')">Add</button></div>').join('')
+          : '<p class="muted">No matches. Riders who share only with friends appear when you type their exact username.</p>';
+      } catch (e) { showError(e); }
+    }, 300);
+  }
+  async function friendAdd(u) {
+    try {
+      me.friends = (await api('friendAdd', { username: u })).friends;
+      $('fQ').value = ''; $('fResults').innerHTML = '';
+      renderFriends(); loadBuddies();
+    } catch (e) { showError(e); }
+  }
+  async function friendRemove(u) {
+    if (!confirm('Remove ' + u + ' from your friends?')) return;
+    try {
+      me.friends = (await api('friendRemove', { username: u })).friends;
+      picked.delete(u); savePrefs();
+      renderFriends(); loadBuddies();
+    } catch (e) { showError(e); }
   }
 
   // Accepts "123…", "<@123…>", "@name" or "name"; stores the bare ID or name.
