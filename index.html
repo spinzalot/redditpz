@@ -151,6 +151,8 @@
           <li>Pick that file below and tap <b>Sync</b>.</li>
         </ol>
         <input type="file" id="sFile" accept=".csv,text/csv">
+        <div class="toggle"><input type="checkbox" id="sFull">
+          <label for="sFull" style="margin:0">Send my full history (only needed after a matching fix; slower)</label></div>
         <p><button class="primary" id="sBtn" onclick="sync()">Sync</button></p>
         <p class="muted" id="sLast"></p>
         <details id="sDetails" class="muted hidden"><summary>Technical details of the last sync</summary><pre id="sOut"></pre></details>
@@ -345,6 +347,7 @@
       me = r.me || await api('me');   // older back end: fetch the profile separately
       $('sLast').textContent = 'Last synced: ' + new Date(me.rider.lastSync || Date.now()).toLocaleString();
       checkSyncPrompt();
+      $('sFull').checked = false;
       showSyncResult(r.newly || []);
       showTab('Progress');
     } catch (e) { showError(e); }
@@ -369,7 +372,7 @@
     const head = (rows.shift() || []).map(h => String(h).trim().toLowerCase());
     const idx = NEED_COLS.map(n => head.indexOf(n.toLowerCase()));
     if (idx.some(i => i < 0)) return { csv: text, kept: rows.length, total: rows.length, full: true };  // unexpected format: send as is
-    const full = needFullSync();
+    const full = needFullSync() || $('sFull').checked;
     const cutoff = full ? -Infinity : me.rider.lastRideAt - 7 * 86400;
     const keep = rows.filter(r => r.length > idx[3] && String(r[idx[3]]).trim().toLowerCase() === 'cycling' &&
                                   (full || (tsEpoch(r[idx[0]]) ?? Infinity) >= cutoff));
