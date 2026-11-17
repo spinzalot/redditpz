@@ -316,6 +316,9 @@
 
   const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const TYPE_SHORT = { PZMax: 'PZM' };
+  // Library grid columns, easiest to hardest. Types not listed go at the end.
+  const TYPE_ORDER = ['PZR', 'PZE', 'PZ', 'RR', 'PC', 'PZMax', 'FTP'];
+  const typeRank = t => { const i = TYPE_ORDER.indexOf(t); return i === -1 ? 99 : i; };
   const shortLabel = c => c.len + (TYPE_SHORT[c.type] || c.type);   // e.g. 45PZE, 60PZ, 30PZM, 60RR
 
   // Program challenges: weeks down the side, days across, a check mark per done class.
@@ -365,10 +368,11 @@
   function renderProgress() {
     if (progress.challenge && progress.challenge.kind === 'Program' && progress.classes.some(c => c.week)) return renderProgramGrid();
     const p = progress, pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    p.types = p.types.slice().sort((a, b) => typeRank(a) - typeRank(b));
     let h = '<div class="big">' + p.done + ' / ' + p.total + '</div>' +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
             '<div class="muted">' + pct + '% done, ' + (p.total - p.done) + ' to go. Tap a cell to see its classes.</div>';
-    h += '<table class="grid"><tr><th>min</th>' + p.types.map(t => '<th>' + t + '</th>').join('') + '</tr>';
+    h += '<table class="grid"><tr><th>min</th>' + p.types.map(t => '<th>' + esc(TYPE_SHORT[t] || t) + '</th>').join('') + '</tr>';
     p.lengths.forEach(len => {
       h += '<tr><th>' + len + '</th>';
       p.types.forEach(t => {
@@ -391,7 +395,7 @@
     const doneCount = all.filter(c => c.done).length;
     const cs = all.filter(c => showDone || !c.done)
       .sort((a, b) => (a.done - b.done) || (b.air - a.air));
-    let h = '<h3 style="margin-top:0">' + len + ' min ' + type + '</h3>' +
+    let h = '<h3 style="margin-top:0">' + len + ' min ' + esc(TYPE_SHORT[type] || type) + '</h3>' +
             '<div class="toggle" style="margin:0 0 8px"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
             ' onchange="showDone=this.checked; savePrefs(); pickCell(' + len + ',\'' + type + '\', true)">' +
             '<label for="lShowDone" style="margin:0">Show rides I\'ve done (' + doneCount + ')</label></div>';
