@@ -748,7 +748,7 @@
     const t = document.createElement('div');
     t.className = 'toast'; t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2500);
+    setTimeout(() => t.remove(), msg.length > 60 ? 6000 : 2500);
   }
 
   async function copyWorkoutsLink(btn) {
@@ -783,7 +783,8 @@
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);   // Safari needs the promise passed in directly
       toast('Ride graph copied.');
     } catch (e) {
-      try { await navigator.clipboard.writeText(url); toast('Image link copied. Paste it and Discord shows the graph.'); }
+      const why = (e && e.message) ? ' (' + e.message + ')' : '';
+      try { await navigator.clipboard.writeText(url); toast('Image link copied' + why + '. Paste it and Discord shows the graph.'); }
       catch (e2) { prompt('Copy this image link:', url); }
     }
   }
