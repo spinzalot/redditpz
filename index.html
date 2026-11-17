@@ -41,7 +41,7 @@
     .grid td.cell.sel { outline:2px solid var(--ink); outline-offset:-2px; }
     .grid td.empty { color:#bbb; }
     label.radio { display:flex; align-items:center; gap:6px; margin:0; font-size:15px; }
-    .btnrow { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .btnrow { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px; margin-top:8px; }
     .btnrow button, .btnrow .btn { font-size:13px; padding:6px 10px; border-radius:8px; border:1px solid var(--line);
                                    background:#fff; color:var(--ink); text-decoration:none; cursor:pointer; line-height:1.2; }
     .chips { display:flex; flex-wrap:wrap; gap:8px; }
@@ -51,7 +51,7 @@
     .list .item:first-child { border-top:none; }
     .list .title { font-weight:600; }
     .list .done { color:var(--done); }
-    .list img { width:100%; max-height:120px; object-fit:contain; margin-top:6px; background:#fff; cursor:zoom-in; }
+    .list img { display:block; width:100%; height:auto; margin-top:6px; background:#fff; cursor:zoom-in; }
     #whenBox { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
     #whenBox .sheet { background:#fff; width:100%; max-width:480px; border-radius:16px 16px 0 0; padding:16px 16px 24px; }
     .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:#fff;
