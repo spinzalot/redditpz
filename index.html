@@ -40,6 +40,7 @@
     .grid td.cell.complete { background:#e8f5e9; color:var(--done); font-weight:600; }
     .grid td.cell.sel { outline:2px solid var(--ink); outline-offset:-2px; }
     .grid td.empty { color:#bbb; }
+    label.radio { display:flex; align-items:center; gap:6px; margin:0; font-size:15px; }
     .chips { display:flex; flex-wrap:wrap; gap:8px; }
     .chips button { font-size:14px; padding:6px 12px; border-radius:16px; }
     .chips button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
@@ -99,14 +100,18 @@
     <div id="pBuddies" class="hidden">
       <div class="card">
         <label style="margin-top:0">Who can see me in the buddy finder</label>
-        <div class="toggle" style="margin-top:4px"><input type="radio" name="bVis" id="bVisE" value="Everyone">
-          <label for="bVisE" style="margin:0">Everyone</label></div>
-        <div class="toggle" style="margin-top:4px"><input type="radio" name="bVis" id="bVisF" value="Friends">
-          <label for="bVisF" style="margin:0">Only people on my friends list</label></div>
-        <div class="toggle" style="margin-top:4px"><input type="radio" name="bVis" id="bVisN" value="Nobody">
-          <label for="bVisN" style="margin:0">Nobody</label></div>
+        <div class="row" style="gap:16px;margin-top:4px">
+          <label class="radio"><input type="radio" name="bVis" value="Everyone" onchange="saveSettings()"> Everyone</label>
+          <label class="radio"><input type="radio" name="bVis" value="Friends" onchange="saveSettings()"> Friends</label>
+          <label class="radio"><input type="radio" name="bVis" value="Nobody" onchange="saveSettings()"> Just me</label>
+        </div>
         <label for="bDiscord">My Discord user ID (or username)</label>
-        <input id="bDiscord" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. 123456789012345678">
+        <div class="row" style="flex-wrap:nowrap;gap:8px">
+          <input id="bDiscord" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. 123456789012345678"
+                 style="flex:1;min-width:0;max-width:260px">
+          <button id="bSave" onclick="saveSettings()">Save</button>
+        </div>
+        <div class="muted" id="bSaved" style="font-size:13px;min-height:18px"></div>
         <details class="muted" style="margin-top:6px"><summary>Why an ID, and how do I find mine?</summary>
           <p style="margin:6px 0 0">Discord only turns a pasted mention into a real ping when it uses your numeric user ID.
           With just a username, buddy posts name you but don't notify you.</p>
@@ -120,7 +125,7 @@
           <p style="margin:8px 0 2px"><b>On a computer:</b> <b>gear</b> (bottom left) › <b>Advanced</b> › turn on <b>Developer Mode</b>,
             then right-click your own name › <b>Copy User ID</b>.</p>
           <p style="margin:8px 0 0">Paste the number above and tap <b>Save</b>.</p></details>
-        <p style="margin-bottom:0"><button id="bSave" onclick="saveSettings()">Save</button> <span class="muted" id="bSaved"></span></p>
+
       </div>
       <div class="card">
         <details id="fBox"><summary><b>Friends</b> <span class="muted" id="fCount"></span></summary>
@@ -135,21 +140,20 @@
       <div class="card">
         <div class="toggle" style="margin-top:0"><input type="checkbox" id="bFriendsOnly" onchange="savePrefs(); renderChips(); renderBuddies()">
           <label for="bFriendsOnly" style="margin:0">Friends only</label></div>
-        <label>Riding with</label>
+        <label>Riding with <span class="muted">(tap to include)</span></label>
         <div id="bBuddies" class="chips"></div>
-        <div class="muted" style="font-size:13px;margin-top:4px">Tap riders to show only classes you all still need.</div>
-        <label for="bWhen">Ride time for Discord posts</label>
+        <label for="bWhen">Target buddy day/time</label>
         <input id="bWhen" type="datetime-local" style="width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px">
       </div>
       <div class="card" id="bList"><span class="muted">Loading...</span></div>
     </div>
 
     <div id="pProgress">
-      <div class="card">
+      <div class="card" id="pToggles">
         <div class="toggle" style="margin-top:0"><input type="checkbox" id="pRetired" onchange="savePrefs(); loadProgress()">
           <label for="pRetired" style="margin:0">Include retired classes I've done</label></div>
         <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="savePrefs(); loadProgress()">
-          <label for="pPrograms" style="margin:0">Include program rides</label></div>
+          <label for="pPrograms" style="margin:0">Include Peloton program rides</label></div>
       </div>
       <div class="card hidden" id="pSyncPrompt"></div>
       <div class="card hidden" id="pSynced"></div>
@@ -290,12 +294,22 @@
     if (name === 'Buddies') { fillSettings(); loadBuddies(); }
   }
 
+  // RedditPZ programs have their own fixed class list, so the library filters don't apply to them.
+  function isRpzProgram() {
+    const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
+    return ch.kind === 'Program';
+  }
+  function libraryFilters() {
+    return isRpzProgram() ? { includeRetired: true, includePrograms: true }
+                          : { includeRetired: $('pRetired').checked, includePrograms: $('pPrograms').checked };
+  }
+
   async function loadProgress() {
+    $('pToggles').classList.toggle('hidden', isRpzProgram());
     clearError(); selCell = null; $('pList').classList.add('hidden');
     $('pSummary').innerHTML = '<span class="muted">Loading...</span>';
     try {
-      progress = await api('progress', { challengeId: $('cChallenge').value, includeRetired: $('pRetired').checked,
-                                          includePrograms: $('pPrograms').checked });
+      progress = await api('progress', Object.assign({ challengeId: $('cChallenge').value }, libraryFilters()));
       renderProgress();
     } catch (e) { $('pSummary').innerHTML = ''; showError(e); }
   }
@@ -386,7 +400,7 @@
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
-           '<div class="muted">' + (c.program ? 'Program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
+           '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
            (c.done ? '' : '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
            '</div>';
@@ -522,7 +536,7 @@
     clearError();
     $('bList').innerHTML = '<span class="muted">Loading...</span>';
     try {
-      buddies = await api('buddies', { challengeId: $('cChallenge').value, includePrograms: $('pPrograms').checked });
+      buddies = await api('buddies', { challengeId: $('cChallenge').value, includePrograms: libraryFilters().includePrograms });
       [...picked].forEach(u => { if (!buddies.riders.some(r => r.username === u)) picked.delete(u); });
       renderChips();
       renderBuddies();
@@ -568,7 +582,7 @@
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item">' + (isProgram && c.week ? '<div class="muted"><b>Week ' + c.week + ' · ' + esc(c.slot) + '</b></div>' : '') +
            '<div class="title">' + esc(c.title) + '</div>' +
-           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Program ride · released ' : 'Aired ') + aired + '</div>' +
+           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + '</div>' +
            (b.riders.length ? '<div style="margin-top:4px">' + (names(c).length
               ? '👥 Also needs it: ' + names(c).map(esc).join(', ') +
                 (friendsOnly && c.buddies.length > names(c).length ? ' <span class="muted">(+' + (c.buddies.length - names(c).length) + ' others)</span>' : '')
@@ -652,7 +666,7 @@
     const names = who.map(u => mention(discordOf(u), u));
     const lines = [
       '🚴 Ride buddy call: ' + c.title + (c.instructor ? ' with ' + c.instructor : '') +
-        ' (' + (c.program ? 'program ride' : 'aired ' + aired) + ')',
+        ' (' + (c.program ? 'Peloton program ride' : 'aired ' + aired) + ')',
       '⏰ <t:' + when + ':F> (<t:' + when + ':R>)'
     ];
     if (names.length) lines.push('👥 ' + names.join(' ') + ' you still need this one too!');
