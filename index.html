@@ -59,6 +59,9 @@
     .list .title { font-weight:600; }
     .list .done { color:var(--done); }
     .list img { display:block; width:100%; height:auto; margin-top:6px; background:#fff; cursor:zoom-in; }
+    #powerBox { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
+    #powerBox .sheet { background:#fff; width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px 24px; max-height:92vh; overflow:auto; }
+    #powerBox canvas { width:100%; height:auto; display:block; border-radius:8px; background:#fff; }
     #chooseBox { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
     #chooseBox .sheet { background:#fff; width:100%; max-width:480px; border-radius:16px 16px 0 0; padding:16px 16px 24px; max-height:85vh; overflow:auto; }
     #chooseBox label.ch { display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); margin:0; font-weight:normal; }
@@ -197,6 +200,12 @@
         <p class="muted" id="sLast"></p>
         <details id="sDetails" class="muted hidden"><summary>Technical details of the last sync</summary><pre id="sOut"></pre></details>
       </div>
+      <div class="card" id="sStrava">
+        <h3 style="margin-top:0">Strava (optional)</h3>
+        <p class="muted" style="margin-top:0">If your Peloton rides go to Strava, connect it to see your power on a class's ride graph
+          (the <b>Power</b> button on rides you've done). Only you see your Strava data; nothing from it is saved here.</p>
+        <div id="sStravaBody"></div>
+      </div>
     </div>
   </section>
   <pre id="dbg" class="hidden" style="margin-top:16px;font-size:12px"></pre>
@@ -238,6 +247,7 @@
     buddy: svgIcon('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/>'),
     stack: svgIcon('<path d="M6 17V6a2 2 0 0 1 2-2h11"/><rect x="9" y="7" width="12" height="13" rx="2"/><path d="M13.5 10.8v6.4l4.6-3.2z"/>'),
     timer: svgIcon('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M10 2h4M19 6l1.5-1.5"/>'),
+    power: svgIcon('<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'),
     graph: svgIcon('<rect x="8" y="3" width="8" height="4" rx="1"/><path d="M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M7 17l3-4 3 2 4-5"/>')
   };
   const POST_LABEL = ICON.buddy + 'Buddy';
@@ -327,6 +337,8 @@
     $('vApp').classList.remove('hidden');
     renderPicker();
     applyPrefs();
+    renderStrava();
+    finishStravaConnect();
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
     checkSyncPrompt();
     if (!me.rider.lastSync) showTab('Sync'); else loadProgress();
@@ -568,7 +580,7 @@
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + (c.manual ? ' · marked done by you' : '') + '</div>' +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
-           classButtons(c.id) +
+           classButtons(c.id, powerButton(c)) +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -618,7 +630,7 @@
            '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
            (c.done ? '' : '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
-           classButtons(c.id) +
+           classButtons(c.id, powerButton(c)) +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -981,6 +993,159 @@
   const PELOTON_CLASS = id => 'https://members.onepeloton.com/classes/all?modal=classDetailsModal&classId=' + id;
   const TIMER_TOOL = id => 'https://sourdoughrides.com/ride/' + id + '/timer';
   const PROFILE_PNG = id => 'https://cdn.sourdoughrides.com/' + id + '/full_graph_png.png';
+  // ----- Strava: my power over the class's ride graph -----
+  const STRAVA_CLIENT = '298650';
+  const STRAVA_SCOPE = 'read,activity:read_all,profile:read_all';
+  const APP_URL = location.origin + location.pathname;
+  function renderStrava() {
+    const st = (me.rider && me.rider.strava) || {};
+    $('sStravaBody').innerHTML = st.connected
+      ? '<p style="margin:0 0 8px">Connected' + (st.name ? ' as <b>' + esc(st.name) + '</b>' : '') + '.</p>' +
+        '<button onclick="disconnectStrava()">Disconnect Strava</button>'
+      : '<button class="primary" style="background:#fc4c02;border-color:#fc4c02" onclick="connectStrava()">Connect Strava</button>';
+  }
+  function connectStrava() {
+    const mobile = matchMedia('(pointer: coarse)').matches;   // phones: hand off to the Strava app if installed
+    location.href = 'https://www.strava.com/oauth/' + (mobile ? 'mobile/' : '') + 'authorize?client_id=' + STRAVA_CLIENT +
+      '&response_type=code&approval_prompt=auto&scope=' + encodeURIComponent(STRAVA_SCOPE) +
+      '&state=strava&redirect_uri=' + encodeURIComponent(APP_URL);
+  }
+  // Back from Strava's approval page: ?state=strava&code=... (or &error=access_denied)
+  async function finishStravaConnect() {
+    const q = new URLSearchParams(location.search);
+    if (q.get('state') !== 'strava') return;
+    history.replaceState(null, '', APP_URL);
+    if (!q.get('code')) { toast('Strava was not connected.'); return; }
+    if (!/activity:read_all/.test(q.get('scope') || '')) { toast('Strava needs permission to read your activities. Try Connect Strava again and leave that box checked.'); return; }
+    try { toast('Connecting Strava...'); me = await api('stravaConnect', { code: q.get('code') }); renderStrava(); toast('Strava connected.'); }
+    catch (e) { showError(e); }
+  }
+  async function disconnectStrava() {
+    try { me = await api('stravaDisconnect'); renderStrava(); toast('Strava disconnected.'); } catch (e) { showError(e); }
+  }
+  function powerButton(c) {
+    if (!c.done || !c.rodeAt) return '';
+    return '<button onclick="openPower(\'' + c.id + '\')" title="My power on the ride graph">' + ICON.power + 'Power</button>';
+  }
+
+  // Power zones as % of FTP: Z1 <55, Z2 55-75, Z3 76-90, Z4 91-105, Z5 106-120, Z6 121-150, Z7 >150.
+  const ZONE_PCT = [0, 55, 75, 90, 105, 120, 150, 200];
+  // Where the zones sit on Sourdough's graph, as fractions of the image (calibrate against the real graph).
+  const GRAPH = { left: 0, right: 1, zoneTop: [] };
+  function zonePos(watts, ftp) {   // continuous zone position 0..7
+    const pct = watts / ftp * 100;
+    for (let z = 1; z < ZONE_PCT.length; z++) {
+      if (pct <= ZONE_PCT[z]) return z - 1 + (pct - ZONE_PCT[z - 1]) / (ZONE_PCT[z] - ZONE_PCT[z - 1]);
+    }
+    return 7;
+  }
+  function smooth(arr, n) {   // centered moving average
+    const out = new Array(arr.length); let sum = 0, q = [];
+    const half = Math.floor(n / 2);
+    for (let i = 0; i < arr.length; i++) {
+      const lo = Math.max(0, i - half), hi = Math.min(arr.length - 1, i + half);
+      if (i === 0) { for (let j = lo; j <= hi; j++) sum += arr[j]; }
+      else {
+        if (i - half - 1 >= 0) sum -= arr[i - half - 1];
+        if (i + half < arr.length) sum += arr[i + half];
+      }
+      out[i] = sum / (hi - lo + 1);
+    }
+    return out;
+  }
+  let powerData = null, powerImg = null, powerClass = null;
+  function findClass(id) { return ((progress && progress.classes) || []).find(c => c.id === id); }
+  async function openPower(id) {
+    const c = findClass(id);
+    if (!c) return;
+    const st = (me.rider && me.rider.strava) || {};
+    if (!st.connected) {
+      if (confirm('Connect Strava to see your power on this ride graph?')) { showTab('Sync'); $('sStrava').scrollIntoView({ behavior: 'smooth' }); }
+      return;
+    }
+    powerClass = c; powerData = null; powerImg = null;
+    const box = document.createElement('div');
+    box.id = 'powerBox';
+    let ftp = 0; try { ftp = Number(localStorage.getItem('rpzFtp')) || 0; } catch (e) {}
+    box.innerHTML = '<div class="sheet" onclick="event.stopPropagation()">' +
+      '<h3 style="margin:0 0 2px">My power</h3><div class="muted" style="margin-bottom:8px">' + esc(c.title) + '</div>' +
+      '<div id="powerMsg" class="muted">Getting your ride from Strava...</div>' +
+      '<canvas id="powerCanvas" class="hidden"></canvas>' +
+      '<div class="row" style="margin-top:10px;align-items:center"><label for="powerFtp" style="margin:0">FTP</label>' +
+      '<input id="powerFtp" type="number" inputmode="numeric" min="50" max="600" value="' + (ftp || st.ftp || '') + '"' +
+      ' style="width:90px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px" oninput="drawPower()">' +
+      '<span class="muted" style="font-size:13px">your FTP at the time of this ride</span></div>' +
+      '<div class="row" style="margin-top:12px"><button class="primary" id="powerCopy" disabled onclick="sharePower()">' +
+      (CAN_SHARE ? 'Share image' : 'Copy image') + '</button><button onclick="closePower()">Close</button></div></div>';
+    box.onclick = closePower;
+    document.body.appendChild(box);
+    try {
+      const [data, png] = await Promise.all([
+        api('power', { rodeAt: c.rodeAt, lengthMin: c.len }),
+        api('image', { id: c.id })
+      ]);
+      if (powerClass !== c) return;
+      powerData = data;
+      if (!$('powerFtp').value && data.ftp) $('powerFtp').value = data.ftp;
+      powerImg = new Image();
+      powerImg.onload = drawPower;
+      powerImg.src = 'data:image/png;base64,' + png.png;
+    } catch (e) { if ($('powerMsg')) $('powerMsg').textContent = e.message || String(e); }
+  }
+  function closePower() { powerClass = null; const b = $('powerBox'); if (b) b.remove(); }
+  function drawPower() {
+    const cv = $('powerCanvas'); if (!cv || !powerData || !powerImg || !powerImg.complete) return;
+    const ftp = Number($('powerFtp').value);
+    try { if (ftp) localStorage.setItem('rpzFtp', String(ftp)); } catch (e) {}
+    const W = powerImg.naturalWidth, H = powerImg.naturalHeight;
+    cv.width = W; cv.height = H;
+    const g = cv.getContext('2d');
+    g.drawImage(powerImg, 0, 0);
+    const msg = $('powerMsg');
+    if (!(ftp >= 50)) { msg.textContent = 'Enter your FTP to draw your power.'; cv.classList.remove('hidden'); $('powerCopy').disabled = true; return; }
+    const secs = powerClass.len * 60;
+    const w = smooth(powerData.watts.slice(0, secs), 15);
+    const x0 = GRAPH.left * W, x1 = GRAPH.right * W;
+    const yOf = z => {   // zone position -> y; default: zones 0..7 spread evenly from bottom to top
+      if (GRAPH.zoneTop.length === 8) {
+        const i = Math.min(6, Math.floor(z)), f = z - i;
+        return (GRAPH.zoneTop[i] + (GRAPH.zoneTop[i + 1] - GRAPH.zoneTop[i]) * f) * H;
+      }
+      return H - z / 7 * H;
+    };
+    g.lineWidth = Math.max(2, W / 400); g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth *= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
+    g.strokeStyle = '#111'; g.lineWidth /= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
+    const avg = Math.round(powerData.watts.slice(0, secs).reduce((a, b) => a + b, 0) / Math.max(1, Math.min(secs, powerData.watts.length)));
+    const fs = Math.round(Math.max(H / 14, W / 40));
+    g.font = 'bold ' + fs + 'px -apple-system, system-ui, sans-serif';
+    const label = (me.rider.pelotonUsername || '') + ' · avg ' + avg + ' W · FTP ' + ftp;
+    const tw = g.measureText(label).width, pad = H / 60;
+    g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(W - tw - 3 * pad, pad, tw + 2 * pad, fs + 2 * pad);
+    g.fillStyle = '#111'; g.textBaseline = 'top'; g.fillText(label, W - tw - 2 * pad, 2 * pad);
+    msg.textContent = powerData.name + ' · ' + new Date(powerData.start).toLocaleString();
+    cv.classList.remove('hidden'); $('powerCopy').disabled = false;
+  }
+  function tracePath(g, w, secs, x0, x1, yOf, ftp) {
+    g.beginPath();
+    for (let s = 0; s < w.length; s++) {
+      const x = x0 + (x1 - x0) * s / secs, y = yOf(zonePos(w[s], ftp));
+      s ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+  }
+  async function sharePower() {
+    const cv = $('powerCanvas');
+    const blob = new Promise(res => cv.toBlob(res, 'image/png'));
+    try {
+      if (CAN_SHARE) {
+        const file = new File([await blob], 'my-power.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+      }
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      toast('Image copied. Paste it into Discord.');
+    } catch (e) { if (e && e.name !== 'AbortError') toast('Could not copy the image (' + (e.message || e) + ').'); }
+  }
+
   function classButtons(id, first) {
     return '<div class="btnrow">' + (first || '') +
       '<a class="btn" href="' + PELOTON_CLASS(id) + '" target="_blank" rel="noopener" title="Open the class in the Peloton app">' + ICON.stack + 'Peloton</a>' +
