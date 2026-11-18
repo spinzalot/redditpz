@@ -59,6 +59,10 @@
     .list .title { font-weight:600; }
     .list .done { color:var(--done); }
     .list img { display:block; width:100%; height:auto; margin-top:6px; background:#fff; cursor:zoom-in; }
+    #chooseBox { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
+    #chooseBox .sheet { background:#fff; width:100%; max-width:480px; border-radius:16px 16px 0 0; padding:16px 16px 24px; max-height:85vh; overflow:auto; }
+    #chooseBox label.ch { display:flex; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); margin:0; font-weight:normal; }
+    #chooseBox label.ch input { width:20px; height:20px; }
     #whenBox { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
     #whenBox .sheet { background:#fff; width:100%; max-width:480px; border-radius:16px 16px 0 0; padding:16px 16px 24px; }
     .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:#fff;
@@ -104,6 +108,10 @@
     <div class="card" style="padding:12px 16px">
       <label for="cChallenge" style="margin-top:0">Challenge</label>
       <select id="cChallenge" onchange="challengeChanged()"></select>
+      <div id="cSingle" class="row hidden" style="justify-content:space-between;align-items:center">
+        <b id="cSingleName"></b>
+        <button style="font-size:13px;padding:4px 10px" onclick="openChooser()">Choose challenges</button>
+      </div>
     </div>
     <div class="tabs">
       <button id="tProgress" class="on" onclick="showTab('Progress')">Progress</button>
@@ -317,7 +325,7 @@
   // ----- App -----
   function enterApp() {
     $('vApp').classList.remove('hidden');
-    $('cChallenge').innerHTML = me.challenges.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+    renderPicker();
     applyPrefs();
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
     checkSyncPrompt();
@@ -332,7 +340,64 @@
     if (!cache.buddies[id]) fetchData('buddies', id).catch(() => {});
   }
   let currentTab = 'Progress';
+  const CHOOSE = '__choose';
+  let lastChallenge = '';
+  // Challenges this rider shows in the picker (all of them if every one is hidden, which the back end prevents).
+  function shownChallenges() {
+    const s = me.challenges.filter(c => !c.hidden);
+    return s.length ? s : me.challenges;
+  }
+  function renderPicker() {
+    const list = shownChallenges(), keep = $('cChallenge').value;
+    const single = list.length === 1;
+    $('cChallenge').innerHTML = list.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('') +
+      '<option value="' + CHOOSE + '">Choose challenges…</option>';
+    if (list.some(c => c.id === keep)) $('cChallenge').value = keep;
+    $('cChallenge').classList.toggle('hidden', single);
+    $('cSingle').classList.toggle('hidden', !single);
+    $('cSingleName').textContent = single ? list[0].name : '';
+    lastChallenge = $('cChallenge').value;
+  }
+  function openChooser() {
+    const box = document.createElement('div');
+    box.id = 'chooseBox';
+    box.innerHTML = '<div class="sheet" onclick="event.stopPropagation()">' +
+      '<h3 style="margin:0 0 4px">Choose challenges</h3>' +
+      '<div class="muted" style="margin-bottom:8px">Pick the ones you want in your list. Your rides still count toward all of them, ' +
+      'so nothing is lost if you add one back later.</div>' +
+      '<div class="row" style="margin-bottom:4px"><button type="button" style="font-size:13px;padding:4px 10px" onclick="chooseAll(true)">Select all</button>' +
+      '<button type="button" style="font-size:13px;padding:4px 10px" onclick="chooseAll(false)">Deselect all</button></div>' +
+      me.challenges.map(c => '<label class="ch"><input type="checkbox" value="' + esc(c.id) + '"' + (c.hidden ? '' : ' checked') +
+        ' onchange="chooseCheck()"><span>' + esc(c.name) + '</span></label>').join('') +
+      '<div id="chooseMsg" class="muted" style="margin-top:8px"></div>' +
+      '<div class="row" style="margin-top:12px"><button class="primary" id="chooseSave" onclick="saveChooser()">Save</button>' +
+      '<button onclick="closeChooser()">Cancel</button></div></div>';
+    box.onclick = closeChooser;
+    document.body.appendChild(box);
+    chooseCheck();
+  }
+  function chooseAll(on) { document.querySelectorAll('#chooseBox input').forEach(b => b.checked = on); chooseCheck(); }
+  function chooseCheck() {
+    const n = document.querySelectorAll('#chooseBox input:checked').length;
+    $('chooseSave').disabled = n === 0;
+    $('chooseMsg').textContent = n === 0 ? 'Pick at least one challenge.' : '';
+  }
+  function closeChooser() { const b = $('chooseBox'); if (b) b.remove(); }
+  async function saveChooser() {
+    const hidden = [...document.querySelectorAll('#chooseBox input')].filter(b => !b.checked).map(b => b.value);
+    $('chooseSave').disabled = true; $('chooseMsg').textContent = 'Saving…';
+    try {
+      me = await api('challengeView', { hidden: hidden });
+      closeChooser();
+      const before = lastChallenge;
+      renderPicker();
+      checkSyncPrompt();
+      if ($('cChallenge').value !== before) challengeChanged();
+    } catch (e) { $('chooseMsg').textContent = e.message || String(e); $('chooseSave').disabled = false; }
+  }
   function challengeChanged() {
+    if ($('cChallenge').value === CHOOSE) { $('cChallenge').value = lastChallenge; openChooser(); return; }
+    lastChallenge = $('cChallenge').value;
     savePrefs();
     selCell = null; $('pList').classList.add('hidden');
     if (currentTab === 'Progress') loadProgress();
@@ -349,7 +414,8 @@
   }
   function applyPrefs() {
     const p = loadPrefs();
-    if (p.challenge && me.challenges.some(c => c.id === p.challenge)) $('cChallenge').value = p.challenge;
+    if (p.challenge && shownChallenges().some(c => c.id === p.challenge)) $('cChallenge').value = p.challenge;
+    lastChallenge = $('cChallenge').value;
     if (typeof p.retired === 'boolean') $('pRetired').checked = p.retired;
     if (typeof p.programs === 'boolean') $('pPrograms').checked = p.programs;
     if (typeof p.showDone === 'boolean') showDone = p.showDone;
@@ -642,7 +708,7 @@
 
   // Banner on Progress when a challenge changed since my last sync.
   function checkSyncPrompt() {
-    const stale = me.rider.lastSync ? staleChallenges() : [];
+    const stale = me.rider.lastSync ? staleChallenges().filter(c => !c.hidden) : [];
     if (!stale.length) { $('pSyncPrompt').classList.add('hidden'); return; }
     $('pSyncPrompt').innerHTML = '📣 <b>' + stale.map(c => esc(c.name)).join(', ') + '</b> ' +
       (stale.length === 1 ? 'was' : 'were') + ' added or updated since your last sync. Sync to get credit for rides you\'ve already done. ' +
@@ -651,6 +717,8 @@
   }
 
   function showSyncResult(newly) {
+    const hiddenIds = new Set(me.challenges.filter(c => c.hidden).map(c => c.id));
+    newly = newly.filter(g => !hiddenIds.has(g.id));
     let n = 0, body = '';
     newly.forEach(g => {
       n += g.titles.length;
