@@ -1030,8 +1030,9 @@
 
   // Power zones as % of FTP: Z1 <55, Z2 55-75, Z3 76-90, Z4 91-105, Z5 106-120, Z6 121-150, Z7 >150.
   const ZONE_PCT = [0, 55, 75, 90, 105, 120, 150, 200];
-  // Where the zones sit on Sourdough's graph, as fractions of the image (calibrate against the real graph).
-  const GRAPH = { left: 0, right: 1, zoneTop: [] };
+  // Sourdough's graph layout (1120 x 540): plot from x 80 to 1100 covers the whole class; zone bands are
+  // 360/7 tall, Z7 starting at y 88 and Z1 ending at y 448. Kept as fractions so any image scale works.
+  const GRAPH = { w: 1120, h: 540, left: 80, right: 1100, top: 88, bottom: 448, labelY: 492 };
   function zonePos(watts, ftp) {   // continuous zone position 0..7
     const pct = watts / ftp * 100;
     for (let z = 1; z < ZONE_PCT.length; z++) {
@@ -1105,24 +1106,19 @@
     if (!(ftp >= 50)) { msg.textContent = 'Enter your FTP to draw your power.'; cv.classList.remove('hidden'); $('powerCopy').disabled = true; return; }
     const secs = powerClass.len * 60;
     const w = smooth(powerData.watts.slice(0, secs), 15);
-    const x0 = GRAPH.left * W, x1 = GRAPH.right * W;
-    const yOf = z => {   // zone position -> y; default: zones 0..7 spread evenly from bottom to top
-      if (GRAPH.zoneTop.length === 8) {
-        const i = Math.min(6, Math.floor(z)), f = z - i;
-        return (GRAPH.zoneTop[i] + (GRAPH.zoneTop[i + 1] - GRAPH.zoneTop[i]) * f) * H;
-      }
-      return H - z / 7 * H;
-    };
+    const sx = W / GRAPH.w, sy = H / GRAPH.h;
+    const x0 = GRAPH.left * sx, x1 = GRAPH.right * sx, yTop = GRAPH.top * sy, yBot = GRAPH.bottom * sy;
+    const yOf = z => yBot - (yBot - yTop) * z / 7;   // zone position 0..7 -> y (band edges line up with Sourdough's)
+    g.save(); g.beginPath(); g.rect(x0, yTop, x1 - x0, yBot - yTop); g.clip();
     g.lineWidth = Math.max(2, W / 400); g.lineJoin = 'round';
     g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth *= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
-    g.strokeStyle = '#111'; g.lineWidth /= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
+    g.strokeStyle = '#d4008f'; g.lineWidth /= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
+    g.restore();
     const avg = Math.round(powerData.watts.slice(0, secs).reduce((a, b) => a + b, 0) / Math.max(1, Math.min(secs, powerData.watts.length)));
-    const fs = Math.round(Math.max(H / 14, W / 40));
-    g.font = 'bold ' + fs + 'px -apple-system, system-ui, sans-serif';
-    const label = (me.rider.pelotonUsername || '') + ' · avg ' + avg + ' W · FTP ' + ftp;
-    const tw = g.measureText(label).width, pad = H / 60;
-    g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(W - tw - 3 * pad, pad, tw + 2 * pad, fs + 2 * pad);
-    g.fillStyle = '#111'; g.textBaseline = 'top'; g.fillText(label, W - tw - 2 * pad, 2 * pad);
+    const fs = Math.round(18 * sy);   // in the empty strip under the time axis
+    g.font = '600 ' + fs + 'px -apple-system, system-ui, sans-serif';
+    g.fillStyle = '#1e293b'; g.textBaseline = 'middle';
+    g.fillText('My power (pink line): ' + (me.rider.pelotonUsername || '') + ' · avg ' + avg + ' W · FTP ' + ftp, x0, GRAPH.labelY * sy);
     msg.textContent = powerData.name + ' · ' + new Date(powerData.start).toLocaleString();
     cv.classList.remove('hidden'); $('powerCopy').disabled = false;
   }
