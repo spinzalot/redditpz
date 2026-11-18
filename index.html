@@ -1133,7 +1133,7 @@
       g.fillText(mmss(st.zoneSecs[z]), GRAPH.zoneLabelX * sx, (GRAPH.top + (7 - z) * (GRAPH.bottom - GRAPH.top) / 7 + 3) * sy);
     }
     // Bottom line: the absolute numbers (crop it off to share without them). No FTP anywhere.
-    const parts = ['Power: ' + st.avg + 'W', 'NP: ' + st.np + 'W'];
+    const parts = ['Power: ' + st.avg + 'W', 'NP: ' + st.np + 'W', 'Output: ' + st.kj + 'kJ'];
     if (powerData.cadence) parts.push('RPM: ' + powerData.cadence);
     if (powerData.hr) parts.push('HR: ' + powerData.hr);
     g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = font(700, 17); g.fillStyle = '#1e293b';
@@ -1161,7 +1161,8 @@
       while (z < 7 && pct > ZONE_PCT[z]) z++;
       zoneSecs[z]++;
     });
-    return { avg: avg, np: np, tss: tss, zoneSecs: zoneSecs };
+    const kj = Math.round(w.reduce((a, b) => a + b, 0) / 1000);   // watts x 1 s = joules
+    return { avg: avg, np: np, kj: kj, tss: tss, zoneSecs: zoneSecs };
   }
   function tracePath(g, w, secs, x0, x1, yOf, ftp) {
     g.beginPath();
