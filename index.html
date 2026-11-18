@@ -410,6 +410,18 @@
   }
 
   const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  // Program schedule date from the challenge's Week 1 Monday (sent by the back end).
+  function progDate(ch, week, slot) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((ch && ch.week1) || '');
+    const off = DAY_ORDER.indexOf(slot);
+    if (!m || !week || off < 0) return '';
+    const d = new Date(+m[1], +m[2] - 1, +m[3] + (week - 1) * 7 + off);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  function weekLabel(ch, week, slot) {
+    const dt = progDate(ch, week, slot);
+    return 'Week ' + week + ' · ' + esc(slot) + (dt ? ' ' + esc(dt) : '');
+  }
   const TYPE_SHORT = { PZMax: 'PZM' };
   // Library grid columns, easiest to hardest (fallback). Types not listed go at the end.
   const TYPE_ORDER = ['PZR', 'PZE', 'PZ', 'RR', 'PC', 'PZMax', 'FTP'];
@@ -482,7 +494,8 @@
     if (suppressClick) return;
     selCell = 'w' + week + '|' + slot; renderProgramGrid();
     const cs = progress.classes.filter(c => c.week === week && c.slot === slot);
-    let h = '<h3 style="margin-top:0">Week ' + week + ' · ' + esc(slot) + '</h3><div class="list">';
+    const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
+    let h = '<h3 style="margin-top:0">' + weekLabel(ch, week, slot) + '</h3><div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') : '') + esc(c.title) + '</div>' +
@@ -731,7 +744,7 @@
     h += '<div class="list">';
     shown.forEach((c, i) => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item">' + (isProgram && c.week ? '<div class="muted"><b>Week ' + c.week + ' · ' + esc(c.slot) + '</b></div>' : '') +
+      h += '<div class="item">' + (isProgram && c.week ? '<div class="muted"><b>' + weekLabel(ch, c.week, c.slot) + '</b></div>' : '') +
            '<div class="title">' + esc(c.title) + '</div>' +
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + '</div>' +
            (b.riders.length ? '<div style="margin-top:4px">' + (names(c).length
