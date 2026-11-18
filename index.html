@@ -1032,7 +1032,7 @@
   const ZONE_PCT = [0, 55, 75, 90, 105, 120, 150, 200];
   // Sourdough's graph layout (1120 x 540): plot from x 80 to 1100 covers the whole class; zone bands are
   // 360/7 tall, Z7 starting at y 88 and Z1 ending at y 448. Kept as fractions so any image scale works.
-  const GRAPH = { w: 1120, h: 540, left: 80, right: 1100, top: 88, bottom: 448, labelY: 492 };
+  const GRAPH = { w: 1120, h: 540, left: 80, right: 1100, top: 88, bottom: 448, labelY: 492, zoneLabelX: 50, mineX: 1067 };
   function zonePos(watts, ftp) {   // continuous zone position 0..7
     const pct = watts / ftp * 100;
     for (let z = 1; z < ZONE_PCT.length; z++) {
@@ -1112,15 +1112,56 @@
     g.save(); g.beginPath(); g.rect(x0, yTop, x1 - x0, yBot - yTop); g.clip();
     g.lineWidth = Math.max(2, W / 400); g.lineJoin = 'round';
     g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth *= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
-    g.strokeStyle = '#d4008f'; g.lineWidth /= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
+    g.strokeStyle = PINK; g.lineWidth /= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
     g.restore();
-    const avg = Math.round(powerData.watts.slice(0, secs).reduce((a, b) => a + b, 0) / Math.max(1, Math.min(secs, powerData.watts.length)));
-    const fs = Math.round(18 * sy);   // in the empty strip under the time axis
-    g.font = '600 ' + fs + 'px -apple-system, system-ui, sans-serif';
-    g.fillStyle = '#1e293b'; g.textBaseline = 'middle';
-    g.fillText('My power (pink line): ' + (me.rider.pelotonUsername || '') + ' · avg ' + avg + ' W · FTP ' + ftp, x0, GRAPH.labelY * sy);
+    const raw = powerData.watts.slice(0, secs);
+    const st = rideStats(raw, ftp);
+    const font = (weight, px) => weight + ' ' + Math.round(px * sy) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+    // Top center: my leaderboard name, in my line's color (doubles as the legend).
+    g.textBaseline = 'alphabetic'; g.textAlign = 'center';
+    g.font = font(700, 18); g.fillStyle = PINK;
+    g.fillText(me.rider.pelotonUsername || '', W / 2, 62 * sy);
+    // My TSS beside Sourdough's planned TSS.
+    g.textAlign = 'left';
+    g.font = font(500, 11); g.fillText('MINE', GRAPH.mineX * sx, 48 * sy);
+    g.font = font(700, 20); g.fillText(String(st.tss), GRAPH.mineX * sx, 68 * sy);
+    // My time in each zone, bold, at the top of each zone label box.
+    g.textAlign = 'center'; g.textBaseline = 'top'; g.font = font(700, 12);
+    for (let z = 1; z <= 7; z++) {
+      if (!st.zoneSecs[z]) continue;
+      g.fillStyle = [6, 7, 2, 1].includes(z) ? '#ffffff' : '#1e293b';
+      g.fillText(mmss(st.zoneSecs[z]), GRAPH.zoneLabelX * sx, (GRAPH.top + (7 - z) * (GRAPH.bottom - GRAPH.top) / 7 + 3) * sy);
+    }
+    // Bottom line: the absolute numbers (crop it off to share without them). No FTP anywhere.
+    const parts = ['Power: ' + st.avg + 'W', 'NP: ' + st.np + 'W'];
+    if (powerData.cadence) parts.push('RPM: ' + powerData.cadence);
+    if (powerData.hr) parts.push('HR: ' + powerData.hr);
+    g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = font(700, 17); g.fillStyle = '#1e293b';
+    g.fillText(parts.join('    '), x0, GRAPH.labelY * sy);
     msg.textContent = powerData.name + ' · ' + new Date(powerData.start).toLocaleString();
     cv.classList.remove('hidden'); $('powerCopy').disabled = false;
+  }
+  const PINK = '#d4008f';
+  function mmss(sec) { const m = Math.floor(sec / 60), s = Math.round(sec % 60); return (m ? m : '') + ':' + String(s).padStart(2, '0'); }
+  // Average power, Coggan NP / TSS, and seconds in each zone, from one-per-second watts.
+  function rideStats(w, ftp) {
+    const n = w.length || 1;
+    const avg = Math.round(w.reduce((a, b) => a + b, 0) / n);
+    let sum = 0, sum4 = 0, cnt = 0;   // NP: 30 s rolling average, 4th power, mean, 4th root
+    for (let i = 0; i < w.length; i++) {
+      sum += w[i]; if (i >= 30) sum -= w[i - 30];
+      if (i >= 29) { sum4 += Math.pow(sum / 30, 4); cnt++; }
+    }
+    const np = cnt ? Math.round(Math.pow(sum4 / cnt, 0.25)) : avg;
+    const IF = np / ftp;
+    const tss = Math.round(w.length * np * IF / (ftp * 3600) * 100);
+    const zoneSecs = [0, 0, 0, 0, 0, 0, 0, 0];
+    w.forEach(v => {   // Z1 <= 55%, Z2 <= 75%, ... Z6 <= 150%, Z7 above
+      const pct = v / ftp * 100; let z = 1;
+      while (z < 7 && pct > ZONE_PCT[z]) z++;
+      zoneSecs[z]++;
+    });
+    return { avg: avg, np: np, tss: tss, zoneSecs: zoneSecs };
   }
   function tracePath(g, w, secs, x0, x1, yOf, ftp) {
     g.beginPath();
