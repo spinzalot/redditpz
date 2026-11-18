@@ -161,9 +161,9 @@
 
     <div id="pProgress">
       <div class="card" id="pToggles">
-        <div class="toggle" style="margin-top:0"><input type="checkbox" id="pRetired" onchange="savePrefs(); loadProgress()">
+        <div class="toggle" style="margin-top:0"><input type="checkbox" id="pRetired" onchange="filtersChanged()">
           <label for="pRetired" style="margin:0">Include retired classes I've done</label></div>
-        <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="savePrefs(); loadProgress()">
+        <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="filtersChanged()">
           <label for="pPrograms" style="margin:0">Include Peloton program rides</label></div>
       </div>
       <div class="card hidden" id="pSyncPrompt"></div>
@@ -191,6 +191,7 @@
       </div>
     </div>
   </section>
+  <pre id="dbg" class="hidden" style="margin-top:16px;font-size:12px"></pre>
 </main>
 
 <script>
@@ -201,6 +202,24 @@
 
   let token = null, me = null, progress = null, selCell = null, showDone = false;
   let buddies = null, shown = [];
+  // Last data per challenge, so tabs draw instantly and refresh in the background.
+  let cache = { progress: {}, buddies: {} };
+  const cacheAt = { progress: {}, buddies: {} };
+  const FRESH_MS = 30000;   // data younger than this isn't re-fetched
+  function putCache(kind, id, data) { cache[kind][id] = data; cacheAt[kind][id] = Date.now(); }
+  const isFresh = (kind, id) => cache[kind][id] && Date.now() - (cacheAt[kind][id] || 0) < FRESH_MS;
+  // One request per (tab, challenge) at a time: callers asking while it's in flight share it.
+  const inflight = {};
+  function fetchData(kind, id) {
+    const key = kind + '|' + id;
+    if (inflight[key]) return inflight[key];
+    const payload = kind === 'progress' ? { challengeId: id, includeRetired: true, includePrograms: true }
+                                        : { challengeId: id, includePrograms: true };
+    return inflight[key] = api(kind, payload)
+      .then(d => { putCache(kind, id, d); return d; })
+      .finally(() => { delete inflight[key]; });
+  }
+  let progressRaw = null;
   const picked = new Set();
   const CAN_SHARE = !!navigator.share && matchMedia('(pointer: coarse)').matches;   // phones and tablets
   // Line icons for the class buttons (drawn in the button's text color).
@@ -234,7 +253,14 @@
   async function startSession(credential) {
     token = credential; saveToken(credential);
     try {
-      me = await api('me');
+      let boot = null;
+      try { boot = await api('boot', { challengeId: loadPrefs().challenge }); }
+      catch (e) { if (!/Unknown request/.test(e.message)) throw e; }   // older back end: profile only
+      me = boot ? boot.me : await api('me');
+      if (boot && boot.challengeId) {
+        if (boot.progress) putCache('progress', boot.challengeId, boot.progress);
+        if (boot.buddies) putCache('buddies', boot.challengeId, boot.buddies);
+      }
       $('vSignin').classList.add('hidden');
       $('who').classList.remove('hidden');
       $('whoName').textContent = me.rider ? me.rider.pelotonUsername : me.email;
@@ -248,9 +274,17 @@
   }
 
   // ----- Back end -----
+  // Timing: every call is logged to the console; add ?debug to the address to see the last few on screen.
+  const DEBUG = /[?&]debug\b/.test(location.search);
+  const timings = [];
   async function api(action, payload) {
+    const t0 = performance.now();
     const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ action: action, token: token }, payload || {})) });
     const j = await res.json();
+    const line = action + ': ' + Math.round(performance.now() - t0) + ' ms total' + (j.ms !== undefined ? ', ' + j.ms + ' ms in script' : '');
+    console.log('[RPZ] ' + line);
+    timings.unshift(new Date().toLocaleTimeString() + '  ' + line);
+    if (DEBUG) { timings.length = Math.min(timings.length, 8); $('dbg').textContent = timings.join('\n'); $('dbg').classList.remove('hidden'); }
     if (!j.ok) {
       if (j.error === 'SIGNIN_EXPIRED') { saveToken(null); throw new Error('Your sign-in expired. Please sign in again.'); }
       throw new Error(j.error);
@@ -279,12 +313,22 @@
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
     checkSyncPrompt();
     if (!me.rider.lastSync) showTab('Sync'); else loadProgress();
+    prefetch();
+  }
+  // Loads whichever tab isn't cached yet for the current challenge, quietly in the background.
+  function prefetch() {
+    const id = $('cChallenge').value;
+    if (!id) return;
+    if (!cache.progress[id]) fetchData('progress', id).catch(() => {});
+    if (!cache.buddies[id]) fetchData('buddies', id).catch(() => {});
   }
   let currentTab = 'Progress';
   function challengeChanged() {
     savePrefs();
+    selCell = null; $('pList').classList.add('hidden');
     if (currentTab === 'Progress') loadProgress();
     if (currentTab === 'Buddies') loadBuddies();
+    prefetch();
   }
 
   // ----- Remembered settings (this browser only) -----
@@ -324,14 +368,36 @@
                           : { includeRetired: $('pRetired').checked, includePrograms: $('pPrograms').checked };
   }
 
+  // Draws from the cache right away (if there is one), then refreshes from the back end.
   async function loadProgress() {
     $('pToggles').classList.toggle('hidden', isRpzProgram());
-    clearError(); selCell = null; $('pList').classList.add('hidden');
-    $('pSummary').innerHTML = '<span class="muted">Loading...</span>';
+    clearError();
+    const id = $('cChallenge').value;
+    const cached = cache.progress[id];
+    if (cached) { progressRaw = cached; applyProgressFilters(); renderProgress(); }
+    else { selCell = null; $('pList').classList.add('hidden'); $('pSummary').innerHTML = '<span class="muted">Loading...</span>'; }
+    if (isFresh('progress', id)) return;
     try {
-      progress = await api('progress', Object.assign({ challengeId: $('cChallenge').value }, libraryFilters()));
-      renderProgress();
-    } catch (e) { $('pSummary').innerHTML = ''; showError(e); }
+      const fresh = await fetchData('progress', id);
+      if ($('cChallenge').value !== id || currentTab !== 'Progress') return;   // user moved on
+      if (!cached || JSON.stringify(cached) !== JSON.stringify(fresh)) { progressRaw = fresh; applyProgressFilters(); renderProgress(); }
+    } catch (e) { if (!cached) $('pSummary').innerHTML = ''; showError(e); }
+  }
+
+  // The back end sends every class; Include retired / Include Peloton program rides are applied here, instantly.
+  function applyProgressFilters() {
+    const raw = progressRaw, f = libraryFilters();
+    const vis = raw.classes.filter(c => (!c.retired || (f.includeRetired && c.done)) && (f.includePrograms || !c.program));
+    progress = Object.assign({}, raw, {
+      classes: vis, done: vis.filter(c => c.done).length, total: vis.length,
+      lengths: [...new Set(vis.map(c => c.len))].sort((a, b) => a - b),
+      types: (raw.types || []).filter(t => vis.some(c => c.type === t))
+    });
+  }
+  function filtersChanged() {
+    savePrefs();
+    if (progressRaw) { applyProgressFilters(); renderProgress(); }
+    if (buddies) renderBuddies();
   }
 
   const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -389,14 +455,16 @@
     if (cs.every(c => c.done && !c.manual)) return toast('Already counted from your rides.');
     const c = cs.find(x => x.manual) || cs.find(x => !x.done);
     const mark = !c.manual;
-    c.manual = mark; c.done = mark; progress.done += mark ? 1 : -1;   // show it right away
-    renderProgramGrid();
+    const redraw = () => { applyProgressFilters(); renderProgramGrid(); };
+    delete cache.buddies[progressRaw.challenge.id];
+    c.manual = mark; c.done = mark;   // show it right away
+    redraw();
     toast(mark ? 'Marked done ✓' : 'Mark removed');
     try {
       const r = await api('toggleManual', { challengeId: progress.challenge.id, classId: c.id });
-      if (r.manual !== mark) { c.manual = r.manual; c.done = r.manual; progress.done += r.manual ? 1 : -1; renderProgramGrid(); }
+      if (r.manual !== mark) { c.manual = r.manual; c.done = r.manual; redraw(); }
     } catch (e) {
-      c.manual = !mark; c.done = !mark; progress.done += mark ? -1 : 1; renderProgramGrid();
+      c.manual = !mark; c.done = !mark; redraw();
       showError(e);
     }
   }
@@ -486,6 +554,8 @@
         (slim.full ? 'full history' : 'cycling rides from a week before your newest stored ride') + ').\n\n' + r.report;
       $('sDetails').classList.remove('hidden');
       me = r.me || await api('me');   // older back end: fetch the profile separately
+      cache = { progress: Object.assign({}, cache.progress), buddies: {} };   // keep showing old progress until fresh arrives
+      Object.keys(cacheAt.progress).forEach(k => { cacheAt.progress[k] = 0; });
       $('sLast').textContent = 'Last synced: ' + new Date(me.rider.lastSync || Date.now()).toLocaleString();
       checkSyncPrompt();
       $('sFull').checked = false;
@@ -589,6 +659,7 @@
       const vis = (document.querySelector('input[name=bVis]:checked') || {}).value || 'Nobody';
       me = await api('settings', { discordName: cleanDiscord($('bDiscord').value), visibility: vis,
                                    buddyOptIn: vis !== 'Nobody' });   // buddyOptIn: for an older back end
+      cache.buddies = {};
       $('bSaved').textContent = 'Saved.';
       renderSettingsSummary();
       loadBuddies();
@@ -597,13 +668,20 @@
 
   async function loadBuddies() {
     clearError();
-    $('bList').innerHTML = '<span class="muted">Loading...</span>';
-    try {
-      buddies = await api('buddies', { challengeId: $('cChallenge').value, includePrograms: libraryFilters().includePrograms });
+    const id = $('cChallenge').value;
+    const cached = cache.buddies[id];
+    const show = d => {
+      buddies = d;
       [...picked].forEach(u => { if (!buddies.riders.some(r => r.username === u)) picked.delete(u); });
-      renderChips();
-      renderBuddies();
-    } catch (e) { $('bList').innerHTML = ''; showError(e); }
+      renderChips(); renderBuddies();
+    };
+    if (cached) show(cached); else $('bList').innerHTML = '<span class="muted">Loading...</span>';
+    if (isFresh('buddies', id)) return;
+    try {
+      const fresh = await fetchData('buddies', id);
+      if ($('cChallenge').value !== id || currentTab !== 'Buddies') return;
+      if (!cached || JSON.stringify(cached) !== JSON.stringify(fresh)) show(fresh);
+    } catch (e) { if (!cached) $('bList').innerHTML = ''; showError(e); }
   }
 
   // Chip candidates: friends who share with me; if I have none yet (and Friends only is off), everyone visible.
@@ -632,7 +710,8 @@
     const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
     const isProgram = ch.kind === 'Program' && b.classes.some(c => c.week);
     const dayIdx = d => (DAY_ORDER.indexOf(d) + 1) || 99;
-    shown = b.classes.filter(c => sel.every(u => c.buddies.indexOf(u) !== -1))
+    const progOk = libraryFilters().includePrograms;
+    shown = b.classes.filter(c => (progOk || !c.program) && sel.every(u => c.buddies.indexOf(u) !== -1))
       .sort(isProgram
         ? (x, y) => ((x.week || 99) - (y.week || 99)) || (dayIdx(x.slot) - dayIdx(y.slot))   // program order: week, then day
         : (x, y) => (names(y).length - names(x).length) || (y.air - x.air));
@@ -696,6 +775,7 @@
   async function friendAdd(u) {
     try {
       me.friends = (await api('friendAdd', { username: u })).friends;
+      cache.buddies = {};
       $('fQ').value = ''; $('fResults').innerHTML = '';
       renderFriends(); loadBuddies();
     } catch (e) { showError(e); }
@@ -704,6 +784,7 @@
     if (!confirm('Remove ' + u + ' from your friends?')) return;
     try {
       me.friends = (await api('friendRemove', { username: u })).friends;
+      cache.buddies = {};
       picked.delete(u); savePrefs();
       renderFriends(); loadBuddies();
     } catch (e) { showError(e); }
