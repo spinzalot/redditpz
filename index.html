@@ -525,7 +525,7 @@
 
   // Program challenges: weeks down the side, days across, a check mark per done class.
   function renderProgramGrid() {
-    const p = progress, pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    const p = progress, pct = p.total ? Math.floor(100 * p.done / p.total) : 0;   // round down: 100% only when complete
     const weeks = [...new Set(p.classes.filter(c => c.week).map(c => c.week))].sort((a, b) => a - b);
     const slots = [...new Set(p.classes.filter(c => c.week).map(c => c.slot))]
       .sort((a, b) => (DAY_ORDER.indexOf(a) + 1 || 99) - (DAY_ORDER.indexOf(b) + 1 || 99) || String(a).localeCompare(String(b)));
@@ -617,7 +617,7 @@
 
   function renderProgress() {
     if (progress.challenge && progress.challenge.kind === 'Program' && progress.classes.some(c => c.week)) return renderProgramGrid();
-    const p = progress, pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    const p = progress, pct = p.total ? Math.floor(100 * p.done / p.total) : 0;   // round down: 100% only when complete
     p.types = p.types.slice().sort((a, b) => typeRank(a) - typeRank(b));
     let h = '<div class="big">' + p.done + '/' + p.total + ' <span style="color:#8e8e93;font-weight:600">(' + pct + '%)</span></div>' +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
