@@ -527,9 +527,9 @@
     const weeks = [...new Set(p.classes.filter(c => c.week).map(c => c.week))].sort((a, b) => a - b);
     const slots = [...new Set(p.classes.filter(c => c.week).map(c => c.slot))]
       .sort((a, b) => (DAY_ORDER.indexOf(a) + 1 || 99) - (DAY_ORDER.indexOf(b) + 1 || 99) || String(a).localeCompare(String(b)));
-    let h = '<div class="big">' + p.done + ' / ' + p.total + '</div>' +
+    let h = '<div class="big">' + p.done + '/' + p.total + ' <span style="color:#8e8e93;font-weight:600">(' + pct + '%)</span></div>' +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
-            '<div class="muted">' + pct + '% done, ' + (p.total - p.done) + ' to go. Tap a day to see its class.</div>';
+            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a day to see its class.</div>';
     const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
     const todayKey = new Date().toDateString();
     let lastMonth = -1;
@@ -617,9 +617,9 @@
     if (progress.challenge && progress.challenge.kind === 'Program' && progress.classes.some(c => c.week)) return renderProgramGrid();
     const p = progress, pct = p.total ? Math.round(100 * p.done / p.total) : 0;
     p.types = p.types.slice().sort((a, b) => typeRank(a) - typeRank(b));
-    let h = '<div class="big">' + p.done + ' / ' + p.total + '</div>' +
+    let h = '<div class="big">' + p.done + '/' + p.total + ' <span style="color:#8e8e93;font-weight:600">(' + pct + '%)</span></div>' +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
-            '<div class="muted">' + pct + '% done, ' + (p.total - p.done) + ' to go. Tap a cell to see its classes.</div>';
+            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a cell to see its classes.</div>';
     h += '<table class="grid"><tr><th>min</th>' + p.types.map(t => '<th>' + esc(TYPE_SHORT[t] || t) + '</th>').join('') + '</tr>';
     p.lengths.forEach(len => {
       h += '<tr><th>' + len + '</th>';
