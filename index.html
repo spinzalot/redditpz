@@ -655,7 +655,7 @@
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
            '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
-           (c.done ? '' : '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
+           ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
            classButtons(c.id, powerButton(c)) +
            '</div>';
@@ -1050,8 +1050,17 @@
   async function disconnectStrava() {
     try { me = await api('stravaDisconnect'); renderStrava(); toast('Strava disconnected.'); } catch (e) { showError(e); }
   }
+  // Program classes that share a title, length and air time can't be told apart in Peloton's export, so
+  // a ride of one may be credited to its twin. Pool the ride times of all such twins for the Power button.
+  function rideTimesFor(c) {
+    const t = String(c.title).toLowerCase();
+    const set = new Set(((progress && progress.classes) || [])
+      .filter(x => x.air === c.air && x.len === c.len && String(x.title).toLowerCase() === t && x.rodeAt)
+      .map(x => x.rodeAt));
+    return [...set].sort((a, b) => b - a);   // newest first
+  }
   function powerButton(c) {
-    if (!c.done || !c.rodeAt) return '';
+    if (!rideTimesFor(c).length) return '';
     return '<button onclick="openPower(\'' + c.id + '\')" title="My power on the ride graph">' + ICON.power + 'Power</button>';
   }
 
@@ -1091,12 +1100,21 @@
       if (confirm('Connect Strava to see your power on this ride graph?')) { showTab('Sync'); $('sStrava').scrollIntoView({ behavior: 'smooth' }); }
       return;
     }
-    powerClass = c; powerData = null; powerImg = null;
+    const times = rideTimesFor(c);
+    powerClass = c; powerData = null; powerImg = null; powerTimes = times;
     const box = document.createElement('div');
     box.id = 'powerBox';
     let ftp = 0; try { ftp = Number(localStorage.getItem('rpzFtp')) || 0; } catch (e) {}
     box.innerHTML = '<div class="sheet" onclick="event.stopPropagation()">' +
       '<h3 style="margin:0 0 2px">My power</h3><div class="muted" style="margin-bottom:8px">' + esc(c.title) + '</div>' +
+      (times.length > 1
+        ? '<div class="row" style="margin-bottom:6px;align-items:center"><label for="powerRide" style="margin:0">Your ride</label>' +
+          '<select id="powerRide" onchange="loadPowerRide()" style="font-size:16px;padding:6px;border:1px solid var(--line);border-radius:8px">' +
+          times.map(t => '<option value="' + t + '">' + esc(new Date(t * 1000).toLocaleString(undefined,
+            { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</option>').join('') +
+          '</select></div><div class="muted" style="font-size:13px;margin-bottom:6px">This class has a twin with the same title and air time, ' +
+          'which Peloton\'s export can\'t tell apart. Pick the ride you want.</div>'
+        : '') +
       '<div id="powerMsg" class="muted">Getting your ride from Strava...</div>' +
       '<canvas id="powerCanvas" class="hidden"></canvas>' +
       '<div class="row" style="margin-top:10px;align-items:center"><label for="powerFtp" style="margin:0">FTP</label>' +
@@ -1107,17 +1125,27 @@
       (CAN_SHARE ? 'Share image' : 'Copy image') + '</button><button onclick="closePower()">Close</button></div></div>';
     box.onclick = closePower;
     document.body.appendChild(box);
-    try {
-      const [data, png] = await Promise.all([
-        api('power', { rodeAt: c.rodeAt, lengthMin: c.len }),
-        api('image', { id: c.id })
-      ]);
+    api('image', { id: c.id }).then(png => {
       if (powerClass !== c) return;
-      powerData = data;
-      if (!$('powerFtp').value && data.ftp) $('powerFtp').value = data.ftp;
       powerImg = new Image();
       powerImg.onload = drawPower;
       powerImg.src = 'data:image/png;base64,' + png.png;
+    }).catch(e => { if ($('powerMsg')) $('powerMsg').textContent = e.message || String(e); });
+    loadPowerRide();
+  }
+  let powerTimes = [];
+  async function loadPowerRide() {
+    const c = powerClass; if (!c) return;
+    const rodeAt = $('powerRide') ? Number($('powerRide').value) : powerTimes[0];
+    powerData = null;
+    $('powerMsg').textContent = 'Getting your ride from Strava...';
+    $('powerCopy').disabled = true;
+    try {
+      const data = await api('power', { rodeAt: rodeAt, lengthMin: c.len });
+      if (powerClass !== c || ($('powerRide') && Number($('powerRide').value) !== rodeAt)) return;
+      powerData = data;
+      if (!$('powerFtp').value && data.ftp) $('powerFtp').value = data.ftp;
+      drawPower();
     } catch (e) { if ($('powerMsg')) $('powerMsg').textContent = e.message || String(e); }
   }
   function closePower() { powerClass = null; const b = $('powerBox'); if (b) b.remove(); }
