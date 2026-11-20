@@ -68,7 +68,9 @@
     .list .item:first-child { border-top:none; }
     .list .title { font-weight:600; }
     .list .done { color:var(--done); }
-    .list img { display:block; width:100%; height:auto; margin-top:6px; background:#fff; cursor:zoom-in; }
+    .list img { display:block; width:100%; height:auto; aspect-ratio:1120 / 540; margin-top:6px; background:#fff; cursor:zoom-in; }
+    /* Scrolling to a panel stops below the sticky title bar. */
+    #pList, #bList { scroll-margin-top:56px; }
     #powerBox { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
     #powerBox .sheet { background:#fff; width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px 24px; max-height:92vh; overflow:auto; }
     #powerBox canvas { width:100%; height:auto; display:block; border-radius:8px; background:#fff; }
