@@ -340,7 +340,9 @@
     const j = await res.json();
     const line = (BACKEND === 'cf' ? '[CF] ' : '') + action + ': ' + Math.round(performance.now() - t0) + ' ms total' +
                  (j.ms !== undefined ? ', ' + j.ms + ' ms in script' : '') +
-                 (j.authMs !== undefined ? ' (sign-in check ' + j.authMs + ')' : '');
+                 (j.authMs !== undefined ? ' (sign-in check ' + j.authMs + ')' : '') +
+                 (j.d1 ? ' · D1 ' + j.d1.trips + ' trip' + (j.d1.trips === 1 ? '' : 's') + ', ' +
+                   j.d1.read.toLocaleString() + ' rows read, ' + j.d1.written.toLocaleString() + ' written' : '');
     console.log('[RPZ] ' + line);
     timings.unshift(new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '  ' + line);
     timings.length = Math.min(timings.length, 30);
