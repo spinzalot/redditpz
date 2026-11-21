@@ -226,7 +226,29 @@
 
 <script>
   // ----- Configuration -----
-  const API_URL = 'https://script.google.com/macros/s/AKfycbxUnqC05vMPpmfQze2iGjTp56JnYRDCZ57__vdUnhf4zwpXMOEiktvwDPS5EuE3Kr7b/exec';   // Apps Script deployment URL ending in /exec
+  // Back end: Apps Script by default. Add ?backend=cf to the address to try the Cloudflare Worker on
+  // this device (remembered), and ?backend=gas to go back.
+  const BACKENDS = {
+    gas: 'https://script.google.com/macros/s/AKfycbxUnqC05vMPpmfQze2iGjTp56JnYRDCZ57__vdUnhf4zwpXMOEiktvwDPS5EuE3Kr7b/exec',
+    cf: 'https://rpz-worker.spinzalot88.workers.dev/rpz/api',
+  };
+  const BACKEND = (() => {
+    const want = new URLSearchParams(location.search).get('backend');
+    try {
+      if (want === 'cf') localStorage.setItem('rpzBackend', 'cf');
+      if (want === 'gas') localStorage.removeItem('rpzBackend');
+      return localStorage.getItem('rpzBackend') === 'cf' ? 'cf' : 'gas';
+    } catch (e) { return want === 'cf' ? 'cf' : 'gas'; }
+  })();
+  const API_URL = BACKENDS[BACKEND];
+  if (BACKEND === 'cf') addEventListener('DOMContentLoaded', () => {   // so it's obvious which one you're on
+    const tag = document.createElement('div');
+    tag.textContent = 'Cloudflare';
+    tag.title = 'Using the Cloudflare back end. Add ?backend=gas to the address to switch back.';
+    tag.style.cssText = 'position:fixed;right:6px;bottom:6px;z-index:99;font:600 11px system-ui;padding:2px 7px;' +
+      'border-radius:9px;background:#f38020;color:#fff;opacity:.85;pointer-events:none';
+    document.body.appendChild(tag);
+  });
   const CLIENT_ID = '971118752046-16hom4b3b76gqamdhhi7tjahdjb8ri59.apps.googleusercontent.com';
   const PROFILE_IMG = id => 'https://cdn.sourdoughrides.com/' + id + '/full_graph.svg';
 
@@ -316,7 +338,7 @@
     const t0 = performance.now();
     const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ action: action, token: token }, payload || {})) });
     const j = await res.json();
-    const line = action + ': ' + Math.round(performance.now() - t0) + ' ms total' +
+    const line = (BACKEND === 'cf' ? '[CF] ' : '') + action + ': ' + Math.round(performance.now() - t0) + ' ms total' +
                  (j.ms !== undefined ? ', ' + j.ms + ' ms in script' : '') +
                  (j.authMs !== undefined ? ' (sign-in check ' + j.authMs + ')' : '');
     console.log('[RPZ] ' + line);
