@@ -608,9 +608,9 @@
       const label = newMonth ? dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : String(dt.getDate());
       return { html: '<span class="dom' + (newMonth ? ' mon' : '') + '">' + esc(label) + '</span>', today: dt.toDateString() === todayKey };
     };
-    h += '<table class="grid cal"><tr><th></th>' + slots.map(d => '<th>' + esc(d) + '</th>').join('') + '</tr>';
+    h += '<table class="grid cal"><tr><th>Week</th>' + slots.map(d => '<th>' + esc(d) + '</th>').join('') + '</tr>';
     weeks.forEach(w => {
-      h += '<tr><th>Wk ' + w + '</th>';
+      h += '<tr><th>' + w + '</th>';
       slots.forEach(d => {
         const cs = p.classes.filter(c => c.week === w && c.slot === d);
         const cn = corner(w, d);
