@@ -618,7 +618,7 @@
       .sort((a, b) => (DAY_ORDER.indexOf(a) + 1 || 99) - (DAY_ORDER.indexOf(b) + 1 || 99) || String(a).localeCompare(String(b)));
     let h = titleRow(p, pct) +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
-            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a day to see its class.' + (p.other ? ' ↺ = ridden outside the window.' : '') + '</div>';
+            '<div class="muted">' + (p.total - p.done) + ' to go. Tap to see class.' + (p.other ? ' ↺ = done outside window.' : '') + '</div>';
     const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
     const todayKey = new Date().toDateString();
     let lastMonth = -1;
