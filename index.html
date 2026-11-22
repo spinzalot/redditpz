@@ -212,24 +212,27 @@
     <div id="pSync" class="hidden">
       <div class="card">
         <ol>
-          <li>Open <a href="https://members.onepeloton.com/profile/workouts" target="_blank" rel="noopener">your Peloton workouts page</a>.
-            <div class="muted" style="margin-top:4px">On a phone, tapping the link may open the Peloton app instead.
-              <button type="button" style="font-size:13px;padding:4px 8px" onclick="copyWorkoutsLink(this)">Copy link</button>
-              and paste it into Safari's or Chrome's address bar. Switch to the desktop site if the button below is missing.</div></li>
-          <li>Tap <b>Download Workouts</b>. On iPhone the file lands in Files &rsaquo; Downloads or Files &rsaquo; Chrome.</li>
-          <li>Pick that file below and tap <b>Sync</b>.</li>
+          <li>Open <a href="https://members.onepeloton.com/profile/workouts" target="_blank" rel="noopener">your Peloton workouts page</a>
+            <button type="button" style="font-size:13px;padding:2px 8px" onclick="copyWorkoutsLink(this)">Copy link</button></li>
+          <li>Tap <b>Download Workouts</b>.</li>
+          <li>Pick the file below and tap <b>Sync</b>.</li>
         </ol>
+        <p class="muted" style="margin:0 0 8px;font-size:13px">Link opens the Peloton app? Copy it into Safari or Chrome instead.</p>
         <input type="file" id="sFile" accept=".csv,text/csv">
         <div class="toggle"><input type="checkbox" id="sFull">
-          <label for="sFull" style="margin:0">Send my full history (only needed after a matching fix; slower)</label></div>
+          <label for="sFull" style="margin:0">Send full history (slower, rarely needed)</label></div>
         <p><button class="primary" id="sBtn" onclick="sync()">Sync</button></p>
         <p class="muted" id="sLast"></p>
         <details id="sDetails" class="muted hidden"><summary>Technical details of the last sync</summary><pre id="sOut"></pre></details>
       </div>
+      <div class="card">
+        <h3 style="margin-top:0">Display</h3>
+        <div class="toggle"><input type="checkbox" id="sTricks" onchange="toggleTricks(this.checked)">
+          <label for="sTricks" style="margin:0">🧠 Show spinzalot's mind tricks</label></div>
+      </div>
       <div class="card" id="sStrava">
         <h3 style="margin-top:0">Strava (optional)</h3>
-        <p class="muted" style="margin-top:0">If your Peloton rides go to Strava, connect it to see your power on a class's ride graph
-          (the <b>Power</b> button on rides you've done). Only you see your Strava data; nothing from it is saved here.</p>
+        <p class="muted" style="margin-top:0">See your power on ride graphs. Only you see it.</p>
         <div id="sStravaBody"></div>
       </div>
     </div>
@@ -471,7 +474,7 @@
   function loadPrefs() { try { return JSON.parse(localStorage.getItem('rpzPrefs') || '{}'); } catch (e) { return {}; } }
   function savePrefs() {
     const prefs = { challenge: $('cChallenge').value, retired: $('pRetired').checked, programs: $('pPrograms').checked,
-                    showDone: showDone, picked: [...picked], friendsOnly: $('bFriendsOnly').checked, zones: showZones };
+                    showDone: showDone, picked: [...picked], friendsOnly: $('bFriendsOnly').checked, zones: showZones, tricks: showTricks };
     try { localStorage.setItem('rpzPrefs', JSON.stringify(prefs)); } catch (e) {}
   }
   function applyPrefs() {
@@ -484,6 +487,8 @@
     (p.picked || []).forEach(u => picked.add(u));
     $('bFriendsOnly').checked = p.friendsOnly === true;
     showZones = p.zones === true;
+    showTricks = p.tricks !== false;   // on unless turned off
+    $('sTricks').checked = showTricks;
   }
 
   function showTab(name) {
@@ -584,7 +589,8 @@
   }
 
   // spinzalot's mind tricks: worked out ahead of time from each class's intervals (tools/make_tricks.py).
-  let TRICKS = null;
+  let TRICKS = null, showTricks = true;
+  function toggleTricks(on) { showTricks = on; savePrefs(); if (progress) renderProgress(); if (buddies) renderBuddies(); }
   fetch('tricks.json').then(r => r.ok ? r.json() : null).then(j => {
     if (!j || !j.classes) return;
     TRICKS = j;
@@ -592,9 +598,9 @@
     if (buddies && currentTab === 'Buddies') renderBuddies();
   }).catch(() => {});
   const clockAt = sec => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
-  const brain = c => TRICKS && TRICKS.classes[c.id] ? ' <span title="spinzalot mind trick">🧠</span>' : '';
+  const brain = c => showTricks && TRICKS && TRICKS.classes[c.id] ? ' <span title="spinzalot mind trick">🧠</span>' : '';
   function trickLines(c) {
-    const list = TRICKS && TRICKS.classes[c.id];
+    const list = showTricks && TRICKS && TRICKS.classes[c.id];
     if (!list) return '';
     return list.map(([rid, at]) => '<div class="trick">🧠 ' + esc(TRICKS.rules[rid] || '') +
       ' <span class="muted">(' + (at.length > 1 ? 'at ' : 'from ') + at.map(clockAt).join(', ') + ')</span></div>').join('');
@@ -662,7 +668,7 @@
         h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : (other ? ' other' : '')) + (selCell === key ? ' sel' : '') + (cn.today ? ' today' : '') +
              '" data-week="' + w + '" data-slot="' + esc(d) + '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
              cn.html + (done ? '✓' : other ? '↺' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') +
-             (TRICKS && cs.some(c => TRICKS.classes[c.id]) ? '<span class="brainc" title="spinzalot mind trick">🧠</span>' : '') +
+             (showTricks && TRICKS && cs.some(c => TRICKS.classes[c.id]) ? '<span class="brainc" title="spinzalot mind trick">🧠</span>' : '') +
              zoneStrip(cs) + '</td>';
       });
       h += '</tr>';
