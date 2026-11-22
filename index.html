@@ -49,6 +49,10 @@
     .grid.cal td { position:relative; height:46px; padding:14px 2px 4px; border-radius:8px; vertical-align:middle; }
     .grid.cal td.cell.complete, .grid.cal td.cell.other { font-size:18px; }
     .grid.cal td.empty { border-style:dashed; }
+    .grid.cal td.cell { padding-bottom:9px; }
+    .zs { display:flex; height:5px; border-radius:3px; overflow:hidden; }   /* share of class time in each power zone */
+    .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
+    .list .zs { height:6px; margin:4px 0 2px; }
     .grid.cal .dom { position:absolute; top:3px; left:6px; font-size:11px; font-weight:500; color:#8e8e93; }
     .grid.cal .dom.mon { color:var(--ink); font-weight:700; }
     .grid.cal td.today { box-shadow:inset 0 0 0 2px #0a84ff; }
@@ -549,6 +553,26 @@
                           const i = order.indexOf(t); return i === -1 ? 99 : i; };
   const shortLabel = c => c.len + (TYPE_SHORT[c.type] || c.type);   // e.g. 45PZE, 60PZ, 30PZM, 60RR
 
+  // Zone strip: share of each class's time in Z1-Z7 (Peloton's zone colors), from sourdoughrides.com's
+  // program designer data, published next to this page as zones.json. Missing classes just get no strip.
+  const ZONE_COLORS = ['#7c7cf2', '#4fb0f2', '#3fcf9c', '#9fd34a', '#f2cf45', '#f2943f', '#e8505b'];
+  let ZONES = null;
+  fetch('zones.json').then(r => r.ok ? r.json() : null).then(j => {
+    if (!j || !j.zones) return;
+    ZONES = j.zones;
+    if (progress && currentTab === 'Progress') renderProgress();
+  }).catch(() => {});
+  function zoneStrip(classes) {
+    if (!ZONES) return '';
+    const sum = [0, 0, 0, 0, 0, 0, 0];
+    let any = false;
+    classes.forEach(c => { const z = ZONES[c.id]; if (z) { any = true; z.forEach((v, i) => { sum[i] += v; }); } });
+    if (!any) return '';
+    const total = sum.reduce((a, b) => a + b, 0);
+    return '<span class="zs" title="' + sum.map((v, i) => v ? 'Z' + (i + 1) + ' ' + Math.round(100 * v / total) + '%' : '').filter(Boolean).join(' · ') + '">' +
+      sum.map((v, i) => v ? '<span style="flex:' + v + ';background:' + ZONE_COLORS[i] + '"></span>' : '').join('') + '</span>';
+  }
+
   // Rides outside a challenge's count window are shown (↺) but not counted.
   const otherNote = p => p.other ? ' <span class="muted" style="font-size:15px;font-weight:600">· ' + p.other +
     ' ridden at other times</span>' : '';
@@ -593,7 +617,8 @@
         const key = 'w' + w + '|' + d;
         h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : (other ? ' other' : '')) + (selCell === key ? ' sel' : '') + (cn.today ? ' today' : '') +
              '" data-week="' + w + '" data-slot="' + esc(d) + '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
-             cn.html + (done ? '✓' : other ? '↺' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') + '</td>';
+             cn.html + (done ? '✓' : other ? '↺' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') +
+             zoneStrip(cs) + '</td>';
       });
       h += '</tr>';
     });
@@ -643,7 +668,7 @@
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') :
-                                                         (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' +
+                                                         (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + (c.manual ? ' · marked done by you' : '') + '</div>' +
            (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
@@ -694,7 +719,7 @@
     h += '<div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' +
+      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
            (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
@@ -894,7 +919,7 @@
     shown.forEach((c, i) => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item">' + (isProgram && c.week ? '<div class="muted"><b>' + weekLabel(ch, c.week, c.slot) + '</b></div>' : '') +
-           '<div class="title">' + esc(c.title) + '</div>' +
+           '<div class="title">' + esc(c.title) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + '</div>' +
            (b.riders.length ? '<div style="margin-top:4px">' + (names(c).length
               ? '👥 Also needs it: ' + names(c).map(esc).join(', ') +
