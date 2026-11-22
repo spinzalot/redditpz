@@ -60,6 +60,7 @@
     .zs { display:flex; height:5px; border-radius:3px; overflow:hidden; }   /* share of class time in each power zone */
     .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
     .list .zs { height:6px; margin:4px 0 2px; }
+    .trick { font-size:14px; color:#5e4b8b; margin:3px 0; }   /* spinzalot's mind tricks */
     .grid.cal .dom { position:absolute; top:3px; left:6px; font-size:11px; font-weight:500; color:#8e8e93; }
     .grid.cal .dom.mon { color:var(--ink); font-weight:700; }
     .grid.cal td.today { box-shadow:inset 0 0 0 2px #0a84ff; }
@@ -581,6 +582,22 @@
       sum.map((v, i) => v ? '<span style="flex:' + v + ';background:' + ZONE_COLORS[i] + '"></span>' : '').join('') + '</span>';
   }
 
+  // spinzalot's mind tricks: worked out ahead of time from each class's intervals (tools/make_tricks.py).
+  let TRICKS = null;
+  fetch('tricks.json').then(r => r.ok ? r.json() : null).then(j => {
+    if (!j || !j.classes) return;
+    TRICKS = j;
+    if (buddies && currentTab === 'Buddies') renderBuddies();
+  }).catch(() => {});
+  const clockAt = sec => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  const brain = c => TRICKS && TRICKS.classes[c.id] ? ' <span title="spinzalot mind trick">🧠</span>' : '';
+  function trickLines(c) {
+    const list = TRICKS && TRICKS.classes[c.id];
+    if (!list) return '';
+    return list.map(([rid, at]) => '<div class="trick">🧠 ' + esc(TRICKS.rules[rid] || '') +
+      ' <span class="muted">(' + (at.length > 1 ? 'at ' : 'from ') + at.map(clockAt).join(', ') + ')</span></div>').join('');
+  }
+
   // Title row: score on the left, the Zones switch on the right (same line).
   function titleRow(p, pct) {
     const legend = '<span class="zs">' + ZONE_COLORS.map(c => '<span style="flex:1;background:' + c + '"></span>').join('') + '</span>';
@@ -693,9 +710,9 @@
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') :
-                                                         (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
+                                                         (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + brain(c) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + (c.manual ? ' · marked done by you' : '') + '</div>' +
-           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') +
+           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + trickLines(c) +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
            classButtons(c.id, powerButton(c)) +
@@ -744,9 +761,9 @@
     h += '<div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
+      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + brain(c) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
-           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') +
+           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + trickLines(c) +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
            classButtons(c.id, powerButton(c)) +
@@ -944,8 +961,8 @@
     shown.forEach((c, i) => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item">' + (isProgram && c.week ? '<div class="muted"><b>' + weekLabel(ch, c.week, c.slot) + '</b></div>' : '') +
-           '<div class="title">' + esc(c.title) + '</div>' + zoneStrip([c]) +
-           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + '</div>' +
+           '<div class="title">' + esc(c.title) + brain(c) + '</div>' + zoneStrip([c]) +
+           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + '</div>' + trickLines(c) +
            (b.riders.length ? '<div style="margin-top:4px">' + (names(c).length
               ? '👥 Also needs it: ' + names(c).map(esc).join(', ') +
                 (friendsOnly && c.buddies.length > names(c).length ? ' <span class="muted">(+' + (c.buddies.length - names(c).length) + ' others)</span>' : '')
