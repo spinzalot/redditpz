@@ -60,6 +60,7 @@
     .zs { display:flex; height:5px; border-radius:3px; overflow:hidden; }   /* share of class time in each power zone */
     .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
     .list .zs { height:6px; margin:4px 0 2px; }
+    .grid.cal .brainc { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
     .trick { font-size:14px; color:#5e4b8b; margin:3px 0; }   /* spinzalot's mind tricks */
     .grid.cal .dom { position:absolute; top:3px; left:6px; font-size:11px; font-weight:500; color:#8e8e93; }
     .grid.cal .dom.mon { color:var(--ink); font-weight:700; }
@@ -587,6 +588,7 @@
   fetch('tricks.json').then(r => r.ok ? r.json() : null).then(j => {
     if (!j || !j.classes) return;
     TRICKS = j;
+    if (progress && currentTab === 'Progress') renderProgress();
     if (buddies && currentTab === 'Buddies') renderBuddies();
   }).catch(() => {});
   const clockAt = sec => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
@@ -660,6 +662,7 @@
         h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : (other ? ' other' : '')) + (selCell === key ? ' sel' : '') + (cn.today ? ' today' : '') +
              '" data-week="' + w + '" data-slot="' + esc(d) + '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
              cn.html + (done ? '✓' : other ? '↺' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') +
+             (TRICKS && cs.some(c => TRICKS.classes[c.id]) ? '<span class="brainc" title="spinzalot mind trick">🧠</span>' : '') +
              zoneStrip(cs) + '</td>';
       });
       h += '</tr>';
