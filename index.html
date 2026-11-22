@@ -409,7 +409,7 @@
     finishStravaConnect();
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
     checkSyncPrompt();
-    if (!me.rider.lastSync) showTab('Sync'); else loadProgress();
+    showTab(me.rider.lastSync ? 'Progress' : 'Sync');
     prefetch();
   }
   // Loads whichever tab isn't cached yet for the current challenge, quietly in the background.
