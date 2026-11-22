@@ -85,6 +85,16 @@
     .list img { display:block; width:100%; height:auto; aspect-ratio:1120 / 540; margin-top:6px; background:#fff; cursor:zoom-in; }
     /* Scrolling to a panel stops below the sticky title bar. */
     #pList, #bList { scroll-margin-top:56px; }
+    #pListEmpty { display:none; }
+    /* Tablets and computers: calendar on the left, the tapped class and its graph on the right, each scrolling on its own. */
+    @media (min-width: 900px) {
+      body.wideProgress main { max-width:1400px; }
+      body.wideProgress #pProgress { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:16px; align-items:start; }
+      body.wideProgress #pRight { position:sticky; top:64px; max-height:calc(100vh - 80px); overflow-y:auto; overscroll-behavior:contain; }
+      body.wideProgress #pRight .card:first-child { margin-top:0; }
+      body.wideProgress #pListEmpty { display:block; }
+      body.wideProgress #pListEmpty:has(+ #pList:not(.hidden)) { display:none; }
+    }
     #powerBox { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
     #powerBox .sheet { background:#fff; width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:16px 16px 24px; max-height:92vh; overflow:auto; }
     #powerBox canvas { width:100%; height:auto; display:block; border-radius:8px; background:#fff; }
@@ -197,6 +207,7 @@
     </div>
 
     <div id="pProgress">
+      <div id="pLeft">
       <div class="card" id="pToggles">
         <div class="toggle" style="margin-top:0"><input type="checkbox" id="pRetired" onchange="filtersChanged()">
           <label for="pRetired" style="margin:0">Include retired classes I've done</label></div>
@@ -206,7 +217,11 @@
       <div class="card hidden" id="pSyncPrompt"></div>
       <div class="card hidden" id="pSynced"></div>
       <div class="card" id="pSummary"><span class="muted">Loading...</span></div>
-      <div class="card hidden" id="pList"></div>
+      </div>
+      <div id="pRight">
+        <div class="card muted" id="pListEmpty">Tap a tile to see its classes and ride graphs here.</div>
+        <div class="card hidden" id="pList"></div>
+      </div>
     </div>
 
     <div id="pSync" class="hidden">
@@ -491,8 +506,15 @@
     $('sTricks').checked = showTricks;
   }
 
+  const WIDE = matchMedia('(min-width: 900px)');
+  // Brings the class details into view: on wide screens by resetting the right-hand pane, on phones by scrolling to it.
+  function showListPanel() {
+    if (WIDE.matches) $('pRight').scrollTop = 0;
+    else $('pList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   function showTab(name) {
     currentTab = name;
+    document.body.classList.toggle('wideProgress', name === 'Progress');
     ['Progress', 'Buddies', 'Sync'].forEach(n => {
       $('p' + n).classList.toggle('hidden', n !== name);
       $('t' + n).classList.toggle('on', n === name);
@@ -729,7 +751,7 @@
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
     $('pList').innerHTML = h; $('pList').classList.remove('hidden');
-    if (!keepScroll) $('pList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!keepScroll) showListPanel();
   }
 
   function renderProgress() {
@@ -780,7 +802,7 @@
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
     $('pList').innerHTML = h; $('pList').classList.remove('hidden');
-    if (!keepScroll) $('pList').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!keepScroll) showListPanel();
   }
 
   // ----- Sync -----
