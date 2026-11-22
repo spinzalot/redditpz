@@ -46,6 +46,9 @@
     /* Program grid as a calendar: separate rounded day tiles, date in the corner, today ringed. */
     table.grid.cal { border-collapse:separate; border-spacing:4px; margin-top:8px; }
     .grid.cal th { background:none; border:0; padding:2px; font-size:13px; color:#6e6e73; }
+    .grid.cal { table-layout:fixed; }   /* equal day columns, whatever is in them */
+    .grid.cal tr:first-child th:first-child { width:44px; }
+    .grid.cal td { overflow-wrap:anywhere; }
     .grid.cal td { position:relative; height:46px; padding:14px 2px 4px; border-radius:8px; vertical-align:middle; }
     .grid.cal td.cell.complete, .grid.cal td.cell.other { font-size:18px; }
     .grid.cal td.empty { border-style:dashed; }
