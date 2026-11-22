@@ -39,6 +39,7 @@
     .grid td.cell { cursor:pointer; }
     .grid td.cell.complete { background:#e8f5e9; color:var(--done); font-weight:600; }
     .grid td.cell.manual { background:#f0f0f3; color:#8e8e93; }
+    .grid td.cell.other { background:#f4faf4; color:#43a047; }   /* ridden, but outside the count window */
     .grid td.cell { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
     .grid td.cell.sel { outline:2px solid var(--ink); outline-offset:-2px; }
     .grid td.empty { color:#bbb; }
@@ -46,7 +47,7 @@
     table.grid.cal { border-collapse:separate; border-spacing:4px; margin-top:8px; }
     .grid.cal th { background:none; border:0; padding:2px; font-size:13px; color:#6e6e73; }
     .grid.cal td { position:relative; height:46px; padding:14px 2px 4px; border-radius:8px; vertical-align:middle; }
-    .grid.cal td.cell.complete { font-size:18px; }
+    .grid.cal td.cell.complete, .grid.cal td.cell.other { font-size:18px; }
     .grid.cal td.empty { border-style:dashed; }
     .grid.cal .dom { position:absolute; top:3px; left:6px; font-size:11px; font-weight:500; color:#8e8e93; }
     .grid.cal .dom.mon { color:var(--ink); font-weight:700; }
@@ -513,6 +514,7 @@
     const vis = raw.classes.filter(c => (!c.retired || (f.includeRetired && c.done)) && (f.includePrograms || !c.program));
     progress = Object.assign({}, raw, {
       classes: vis, done: vis.filter(c => c.done).length, total: vis.length,
+      other: vis.filter(c => !c.done && c.otherAt > 0).length,
       lengths: [...new Set(vis.map(c => c.len))].sort((a, b) => a - b),
       types: (raw.types || []).filter(t => vis.some(c => c.type === t))
     });
@@ -547,13 +549,25 @@
                           const i = order.indexOf(t); return i === -1 ? 99 : i; };
   const shortLabel = c => c.len + (TYPE_SHORT[c.type] || c.type);   // e.g. 45PZE, 60PZ, 30PZM, 60RR
 
+  // Rides outside a challenge's count window are shown (↺) but not counted.
+  const otherNote = p => p.other ? ' <span class="muted" style="font-size:15px;font-weight:600">· ' + p.other +
+    ' ridden at other times</span>' : '';
+  function otherLine(c) {
+    const day = new Date(c.otherAt * 1000);
+    const ymd = day.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+    const w = (progress && progress.window) || {};
+    const when = w.from && ymd < w.from ? 'before' : (w.to && ymd > w.to ? 'after' : 'outside');
+    return 'You rode this ' + day.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
+           ', ' + when + " this challenge's window. It doesn't count here.";
+  }
+
   // Program challenges: weeks down the side, days across, a check mark per done class.
   function renderProgramGrid() {
     const p = progress, pct = p.total ? Math.floor(100 * p.done / p.total) : 0;   // round down: 100% only when complete
     const weeks = [...new Set(p.classes.filter(c => c.week).map(c => c.week))].sort((a, b) => a - b);
     const slots = [...new Set(p.classes.filter(c => c.week).map(c => c.slot))]
       .sort((a, b) => (DAY_ORDER.indexOf(a) + 1 || 99) - (DAY_ORDER.indexOf(b) + 1 || 99) || String(a).localeCompare(String(b)));
-    let h = '<div class="big">' + p.done + '/' + p.total + ' <span style="color:#8e8e93;font-weight:600">(' + pct + '%)</span></div>' +
+    let h = '<div class="big">' + p.done + '/' + p.total + ' <span style="color:#8e8e93;font-weight:600">(' + pct + '%)</span>' + otherNote(p) + '</div>' +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
             '<div class="muted">' + (p.total - p.done) + ' to go. Tap a day to see its class.</div>';
     const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
@@ -575,10 +589,11 @@
         const cn = corner(w, d);
         if (!cs.length) { h += '<td class="empty' + (cn.today ? ' today' : '') + '">' + cn.html + '–</td>'; return; }
         const done = cs.every(c => c.done), manual = done && cs.some(c => c.manual);
+        const other = !done && cs.every(c => c.done || c.otherAt > 0);   // every open class was ridden at another time
         const key = 'w' + w + '|' + d;
-        h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : '') + (selCell === key ? ' sel' : '') + (cn.today ? ' today' : '') +
+        h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : (other ? ' other' : '')) + (selCell === key ? ' sel' : '') + (cn.today ? ' today' : '') +
              '" data-week="' + w + '" data-slot="' + esc(d) + '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
-             cn.html + (done ? '✓' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') + '</td>';
+             cn.html + (done ? '✓' : other ? '↺' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') + '</td>';
       });
       h += '</tr>';
     });
@@ -627,8 +642,10 @@
     let h = '<h3 style="margin-top:0">' + weekLabel(ch, week, slot) + '</h3><div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') : '') + esc(c.title) + '</div>' +
+      h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') :
+                                                         (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' +
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + (c.manual ? ' · marked done by you' : '') + '</div>' +
+           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
            classButtons(c.id, powerButton(c)) +
@@ -643,7 +660,7 @@
     if (progress.challenge && progress.challenge.kind === 'Program' && progress.classes.some(c => c.week)) return renderProgramGrid();
     const p = progress, pct = p.total ? Math.floor(100 * p.done / p.total) : 0;   // round down: 100% only when complete
     p.types = p.types.slice().sort((a, b) => typeRank(a) - typeRank(b));
-    let h = '<div class="big">' + p.done + '/' + p.total + ' <span style="color:#8e8e93;font-weight:600">(' + pct + '%)</span></div>' +
+    let h = '<div class="big">' + p.done + '/' + p.total + ' <span style="color:#8e8e93;font-weight:600">(' + pct + '%)</span>' + otherNote(p) + '</div>' +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
             '<div class="muted">' + (p.total - p.done) + ' to go. Tap a cell to see its classes.</div>';
     h += '<table class="grid"><tr><th>min</th>' + p.types.map(t => '<th>' + esc(TYPE_SHORT[t] || t) + '</th>').join('') + '</tr>';
@@ -677,8 +694,9 @@
     h += '<div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
+      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' +
            '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
+           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
            classButtons(c.id, powerButton(c)) +
@@ -1079,8 +1097,8 @@
   function rideTimesFor(c) {
     const t = String(c.title).toLowerCase();
     const set = new Set(((progress && progress.classes) || [])
-      .filter(x => x.air === c.air && x.len === c.len && String(x.title).toLowerCase() === t && x.rodeAt)
-      .map(x => x.rodeAt));
+      .filter(x => x.air === c.air && x.len === c.len && String(x.title).toLowerCase() === t && (x.rodeAt || x.otherAt))
+      .map(x => x.rodeAt || x.otherAt));
     return [...set].sort((a, b) => b - a);   // newest first
   }
   function powerButton(c) {
