@@ -783,8 +783,10 @@
     selCell = len + '|' + type; renderProgress();
     const all = progress.classes.filter(c => c.len === len && c.type === type);
     const doneCount = all.filter(c => c.done).length;
+    // With done rides shown: done first, most recently ridden at the top (gray manual checks, which have
+    // no ride date, after those), then the rest by newest air date.
     const cs = all.filter(c => showDone || !c.done)
-      .sort((a, b) => (a.done - b.done) || (b.air - a.air));
+      .sort((a, b) => (b.done - a.done) || ((b.rodeAt || 0) - (a.rodeAt || 0)) || (b.air - a.air));
     let h = '<h3 style="margin-top:0">' + len + ' min ' + esc(TYPE_SHORT[type] || type) + '</h3>' +
             '<div class="toggle" style="margin:0 0 8px"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
             ' onchange="showDone=this.checked; savePrefs(); pickCell(' + len + ',\'' + type + '\', true)">' +
@@ -794,7 +796,8 @@
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + brain(c) + '</div>' + zoneStrip([c]) +
-           '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') + '</div>' +
+           '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') +
+             (c.done && c.rodeAt ? ' · you rode it ' + new Date(c.rodeAt * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '') + '</div>' +
            (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + trickLines(c) +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
