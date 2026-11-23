@@ -66,6 +66,10 @@
     .seg button { border:0; background:transparent; padding:5px 10px; border-radius:7px; font-size:14px; color:#3a3a3c; margin:0; white-space:nowrap; }
     .seg button:disabled { color:#c7c7cc; cursor:default; }
     .seg button.on { background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.15); font-weight:600; color:#1c1c1e; }
+    .signins { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    .sbtn { display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 14px; border-radius:4px; font-size:14px; font-weight:600; }
+    .sbtn.discord { background:#5865f2; border-color:#5865f2; color:#fff; }
+    .sbtn svg { width:20px; height:20px; }
     .trick { font-size:14px; color:#5e4b8b; margin:3px 0; }   /* spinzalot's mind tricks */
     .grid.cal .dom { position:absolute; top:3px; left:6px; font-size:11px; font-weight:500; color:#8e8e93; }
     .grid.cal .dom.mon { color:var(--ink); font-weight:700; }
@@ -144,7 +148,10 @@
   <!-- Sign in -->
   <section id="vSignin" class="card">
     <p>Track your progress through RedditPZ challenges and find riding buddies.</p>
-    <div id="gbtn"></div>
+    <div class="signins">
+      <button type="button" class="sbtn discord hidden" id="discordBtn" onclick="discordStart('signin')"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18a19.7 19.7 0 0 0 6 3l1.3-2a12.7 12.7 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2a19.6 19.6 0 0 0 6-3c.5-5.1-.8-9.5-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.5 8 10.5s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg> Sign in with Discord</button>
+      <div id="gbtn"></div>
+    </div>
   </section>
 
   <!-- Join -->
@@ -261,6 +268,10 @@
         <div class="toggle"><input type="checkbox" id="sTricks" onchange="toggleTricks(this.checked)">
           <label for="sTricks" style="margin:0">🧠 Show spinzalot's mind tricks</label></div>
       </div>
+      <div class="card hidden" id="sSignins">
+        <h3 style="margin-top:0">Sign-in methods</h3>
+        <div id="sSigninsBody"></div>
+      </div>
       <div class="card" id="sStrava">
         <h3 style="margin-top:0">Strava (optional)</h3>
         <p class="muted" style="margin-top:0">See your power on ride graphs. Only you see it.</p>
@@ -339,14 +350,93 @@
   const $ = id => document.getElementById(id);
 
   // ----- Sign-in -----
-  function initSignIn() {
-    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: r => startSession(r.credential), auto_select: true });
+  // Sign-in: Discord, (Reddit, once Reddit approves the app), Google. Every method ends in a RedditPZ
+  // session from the Worker, kept on this device for 90 days and renewed on each visit.
+  const DISCORD_CLIENT = '1574563901864157224';
+  const DISCORD_REDIRECT = 'https://spinzalot.github.io/redditpz/';
+  let googleMode = 'signin';   // what a Google credential is for: 'signin' or 'link'
+  function initSignIn() {   // runs when Google's script has loaded
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: r => googleCredential(r.credential), auto_select: true });
     google.accounts.id.renderButton($('gbtn'), { theme: 'outline', size: 'large', text: 'signin_with' });
-    const saved = loadToken();
-    if (saved) startSession(saved); else google.accounts.id.prompt();
+    if (!token && !discordReturning) google.accounts.id.prompt();
+    if (me && me.rider) renderSignins();
   }
-  function tokenExp(t) {
-    try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000; } catch (e) { return 0; }
+  let discordReturning = false;
+  function startup() {   // runs once the page's script is ready, whether or not Google's script loads
+    if (BACKEND === 'cf') $('discordBtn').classList.remove('hidden');
+    if (finishDiscord()) return;
+    const saved = loadToken();
+    if (saved) startSession(saved);
+  }
+  async function googleCredential(cred) {
+    if (googleMode === 'link') { googleMode = 'signin'; return linkWith('google', { idToken: cred }); }
+    if (BACKEND !== 'cf') return startSession(cred);   // the Apps Script back end takes Google's token as is
+    return signInWith('google', { idToken: cred }, cred);
+  }
+  async function signInWith(provider, proof, googleFallback) {
+    clearError();
+    try {
+      const d = await api('signin', Object.assign({ provider: provider, challengeId: loadPrefs().challenge }, proof));
+      saveToken(token = d.session);
+      showSignedIn(d);
+    } catch (e) {
+      // Sessions not set up on the Worker yet: Google still works the old way.
+      if (googleFallback && /not set up/.test(e.message)) return startSession(googleFallback);
+      showError(e);
+    }
+  }
+  function discordStart(mode) {
+    const nonce = Math.random().toString(36).slice(2);
+    try { sessionStorage.setItem('rpzDiscord', nonce); } catch (e) {}
+    location.href = 'https://discord.com/oauth2/authorize?client_id=' + DISCORD_CLIENT + '&response_type=code&scope=identify' +
+      '&prompt=none&redirect_uri=' + encodeURIComponent(DISCORD_REDIRECT) + '&state=' + encodeURIComponent('dc-' + mode + '-' + nonce);
+  }
+  // Back from Discord's approval page: ?code=...&state=dc-<signin|link>-<nonce> (or ?error=access_denied).
+  function finishDiscord() {
+    const q = new URLSearchParams(location.search);
+    const m = /^dc-(signin|link)-(\w+)$/.exec(q.get('state') || '');
+    if (!m) return false;
+    history.replaceState(null, '', DISCORD_REDIRECT);
+    let nonce = ''; try { nonce = sessionStorage.getItem('rpzDiscord') || ''; sessionStorage.removeItem('rpzDiscord'); } catch (e) {}
+    if (!q.get('code') || m[2] !== nonce) { toast('Discord sign-in was cancelled.'); return false; }
+    discordReturning = true;
+    if (m[1] === 'link') { const saved = loadToken(); if (saved) startSession(saved).then(() => linkWith('discord', { code: q.get('code') })); }
+    else signInWith('discord', { code: q.get('code') });
+    return true;
+  }
+  async function linkWith(provider, proof) {
+    try { me = await api('link', Object.assign({ provider: provider }, proof)); renderSignins(); toast(providerName(provider) + ' sign-in added.'); }
+    catch (e) { showError(e); }
+  }
+  async function unlink(provider) {
+    if (!confirm('Remove ' + providerName(provider) + ' as a way to sign in?')) return;
+    try { me = await api('unlink', { provider: provider }); renderSignins(); } catch (e) { showError(e); }
+  }
+  const providerName = p => ({ discord: 'Discord', reddit: 'Reddit', google: 'Google' })[p] || p;
+  // Sync tab: the sign-in methods on this account, with add / remove (at least one must stay).
+  function renderSignins() {
+    if (BACKEND !== 'cf' || !me || !me.signins) return;
+    const has = new Set(me.signins.map(x => x.provider));
+    let h = '<div class="list">';
+    ['discord', 'google'].forEach(p => {
+      const s = me.signins.find(x => x.provider === p);
+      h += '<div class="item" style="display:flex;align-items:center;gap:8px"><div style="flex:1"><b>' + providerName(p) + '</b>' +
+        (s ? ' <span class="muted">' + (s.name ? '· ' + esc(s.name) : '· connected') + '</span>' : ' <span class="muted">· not added</span>') + '</div>' +
+        (s ? (has.size > 1 ? '<button onclick="unlink(\'' + p + '\')">Remove</button>' : '')
+           : (p === 'discord' ? '<button class="sbtn discord" onclick="discordStart(\'link\')">Add Discord</button>' : '<div id="gLinkBtn"></div>')) + '</div>';
+    });
+    $('sSigninsBody').innerHTML = h + '</div>';
+    $('sSignins').classList.remove('hidden');
+    if (!has.has('google') && window.google && google.accounts) {
+      googleMode = 'link';
+      google.accounts.id.renderButton($('gLinkBtn'), { theme: 'outline', size: 'medium', text: 'continue_with' });
+    }
+  }
+  function tokenExp(t) {   // a RedditPZ session ("rpz1.", field e) or a Google ID token (field exp)
+    try {
+      const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return (p.exp || p.e) * 1000;
+    } catch (e) { return 0; }
   }
   function loadToken() {
     try { const t = localStorage.getItem('rpzToken'); return t && tokenExp(t) > Date.now() + 60000 ? t : null; } catch (e) { return null; }
@@ -359,16 +449,20 @@
       let boot = null;
       try { boot = await api('boot', { challengeId: loadPrefs().challenge }); }
       catch (e) { if (!/Unknown request/.test(e.message)) throw e; }   // older back end: profile only
-      me = boot ? boot.me : await api('me');
-      if (boot && boot.challengeId) {
-        if (boot.progress) putCache('progress', boot.challengeId, boot.progress);
-        if (boot.buddies) putCache('buddies', boot.challengeId, boot.buddies);
-      }
-      $('vSignin').classList.add('hidden');
-      $('who').classList.remove('hidden');
-      $('whoName').textContent = me.rider ? me.rider.pelotonUsername : me.email;
-      if (me.rider) enterApp(); else $('vJoin').classList.remove('hidden');
+      if (boot && boot.session) saveToken(token = boot.session);   // renewed on each visit
+      showSignedIn(boot || { me: await api('me') });
     } catch (e) { showError(e); }
+  }
+  function showSignedIn(boot) {
+    me = boot.me;
+    if (boot.challengeId) {
+      if (boot.progress) putCache('progress', boot.challengeId, boot.progress);
+      if (boot.buddies) putCache('buddies', boot.challengeId, boot.buddies);
+    }
+    $('vSignin').classList.add('hidden');
+    $('who').classList.remove('hidden');
+    $('whoName').textContent = me.rider ? me.rider.pelotonUsername : (me.name || me.email || '');
+    if (me.rider) enterApp(); else $('vJoin').classList.remove('hidden');
   }
   function signOut() {
     saveToken(null); token = null;
@@ -424,6 +518,7 @@
     renderPicker();
     applyPrefs();
     renderStrava();
+    renderSignins();
     finishStravaConnect();
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
     checkSyncPrompt();
@@ -1486,6 +1581,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
 
   function esc(s) { return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+  startup();
 </script>
 </body>
 </html>
