@@ -766,7 +766,7 @@
            (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + trickLines(c) +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
-           classButtons(c.id, powerButton(c)) +
+           classButtons(c) +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -844,7 +844,7 @@
            (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + trickLines(c) +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
-           classButtons(c.id, powerButton(c)) +
+           classButtons(c) +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -1048,7 +1048,7 @@
                                                       : 'No one else sharing with you needs this one.') + '</span>') + '</div>' : '') +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
-           classButtons(c.id, '<button onclick="copyPost(' + i + ')">' + POST_LABEL + '</button>') +
+           classButtons(c, '<button onclick="copyPost(' + i + ')">' + POST_LABEL + '</button>') +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -1246,9 +1246,14 @@
       .map(x => x.rodeAt || x.otherAt));
     return [...set].sort((a, b) => b - a);   // newest first
   }
-  function powerButton(c) {
-    if (!rideTimesFor(c).length) return '';
-    return '<button onclick="openPower(\'' + c.id + '\')" title="My power on the ride graph">' + ICON.power + 'Power</button>';
+  // One Graph button. Ridden with Strava connected: opens the graph with your power already on it (⚡).
+  // Otherwise it copies Sourdough's graph straight to the clipboard.
+  function graphButton(c) {
+    const st = (me && me.rider && me.rider.strava) || {};
+    const mine = st.connected && findClass(c.id) && rideTimesFor(findClass(c.id)).length;
+    return mine
+      ? '<button onclick="openPower(\'' + c.id + '\')" title="The ride graph with my power">' + ICON.power + 'Graph</button>'
+      : '<button onclick="copyImage(\'' + c.id + '\')" title="Copy the ride graph">' + ICON.graph + 'Graph</button>';
   }
 
   // Power zones as % of FTP: Z1 <55, Z2 55-75, Z3 76-90, Z4 91-105, Z5 106-120, Z6 121-150, Z7 >150.
@@ -1283,17 +1288,15 @@
     const c = findClass(id);
     if (!c) return;
     const st = (me.rider && me.rider.strava) || {};
-    if (!st.connected) {
-      if (confirm('Connect Strava to see your power on this ride graph?')) { showTab('Sync'); $('sStrava').scrollIntoView({ behavior: 'smooth' }); }
-      return;
-    }
+    if (!st.connected) return copyImage(id);
     const times = rideTimesFor(c);
+    showMine = true;
     powerClass = c; powerData = null; powerImg = null; powerTimes = times;
     const box = document.createElement('div');
     box.id = 'powerBox';
     let ftp = 0; try { ftp = Number(localStorage.getItem('rpzFtp')) || 0; } catch (e) {}
     box.innerHTML = '<div class="sheet" onclick="event.stopPropagation()">' +
-      '<h3 style="margin:0 0 2px">My power</h3><div class="muted" style="margin-bottom:8px">' + esc(c.title) + '</div>' +
+      '<h3 style="margin:0 0 2px">Ride graph</h3><div class="muted" style="margin-bottom:8px">' + esc(c.title) + '</div>' +
       (times.length > 1
         ? '<div class="row" style="margin-bottom:6px;align-items:center"><label for="powerRide" style="margin:0">Your ride</label>' +
           '<select id="powerRide" onchange="loadPowerRide()" style="font-size:16px;padding:6px;border:1px solid var(--line);border-radius:8px">' +
@@ -1304,12 +1307,14 @@
         : '') +
       '<div id="powerMsg" class="muted">Getting your ride from Strava...</div>' +
       '<canvas id="powerCanvas" class="hidden"></canvas>' +
-      '<div class="row" style="margin-top:10px;align-items:center"><label for="powerFtp" style="margin:0">FTP</label>' +
+      '<div class="row" style="margin-top:10px;align-items:center">' +
+      '<label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="powerMine" checked onchange="showMine=this.checked; drawPower()">My power</label>' +
+      '<label for="powerFtp" style="margin:0 0 0 8px">FTP</label>' +
       '<input id="powerFtp" type="number" inputmode="numeric" min="50" max="600" value="' + (ftp || st.ftp || '') + '"' +
-      ' style="width:90px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px" oninput="drawPower()">' +
-      '<span class="muted" style="font-size:13px">your FTP at the time of this ride</span></div>' +
-      '<div class="row" style="margin-top:12px"><button class="primary" id="powerCopy" disabled onclick="sharePower()">' +
-      (CAN_SHARE ? 'Share image' : 'Copy image') + '</button><button onclick="closePower()">Close</button></div></div>';
+      ' style="width:80px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px" oninput="drawPower()"></div>' +
+      '<div class="row" style="margin-top:12px"><button class="primary" id="powerCopy" disabled onclick="sharePower(false)">Copy</button>' +
+      (CAN_SHARE ? '<button id="powerShare" disabled onclick="sharePower(true)">Share</button>' : '') +
+      '<button onclick="closePower()">Close</button></div></div>';
     box.onclick = closePower;
     document.body.appendChild(box);
     api('image', { id: c.id }).then(png => {
@@ -1324,20 +1329,28 @@
   async function loadPowerRide() {
     const c = powerClass; if (!c) return;
     const rodeAt = $('powerRide') ? Number($('powerRide').value) : powerTimes[0];
-    powerData = null;
+    powerData = null; powerFailed = '';
     $('powerMsg').textContent = 'Getting your ride from Strava...';
-    $('powerCopy').disabled = true;
+    $('powerMine').disabled = false;
+    const key = rodeAt + '|' + c.len;
     try {
-      const data = await api('power', { rodeAt: rodeAt, lengthMin: c.len });
+      const data = powerCache.get(key) || await api('power', { rodeAt: rodeAt, lengthMin: c.len });
+      powerCache.set(key, data);   // reopening the same ride this session costs no Strava call
       if (powerClass !== c || ($('powerRide') && Number($('powerRide').value) !== rodeAt)) return;
       powerData = data;
       if (!$('powerFtp').value && data.ftp) $('powerFtp').value = data.ftp;
-      drawPower();
-    } catch (e) { if ($('powerMsg')) $('powerMsg').textContent = e.message || String(e); }
+    } catch (e) {
+      if (powerClass !== c) return;
+      powerFailed = 'Couldn\'t get your power from Strava: ' + (e.message || String(e));
+      $('powerMine').checked = false; $('powerMine').disabled = true;
+    }
+    drawPower();
   }
+  const powerCache = new Map();
+  let showMine = true, powerFailed = '';
   function closePower() { powerClass = null; const b = $('powerBox'); if (b) b.remove(); }
   function drawPower() {
-    const cv = $('powerCanvas'); if (!cv || !powerData || !powerImg || !powerImg.complete) return;
+    const cv = $('powerCanvas'); if (!cv || !powerImg || !powerImg.complete) return;
     const ftp = Number($('powerFtp').value);
     try { if (ftp) localStorage.setItem('rpzFtp', String(ftp)); } catch (e) {}
     const W = powerImg.naturalWidth, H = powerImg.naturalHeight;
@@ -1345,7 +1358,13 @@
     const g = cv.getContext('2d');
     g.drawImage(powerImg, 0, 0);
     const msg = $('powerMsg');
-    if (!(ftp >= 50)) { msg.textContent = 'Enter your FTP to draw your power.'; cv.classList.remove('hidden'); $('powerCopy').disabled = true; return; }
+    const ready = on => { $('powerCopy').disabled = !on; if ($('powerShare')) $('powerShare').disabled = !on; };
+    cv.classList.remove('hidden');
+    if (!showMine || powerFailed) {   // Sourdough's graph on its own
+      msg.textContent = powerFailed || 'Ride graph without your power.'; ready(true); return;
+    }
+    if (!powerData) { msg.textContent = 'Getting your ride from Strava...'; ready(true); return; }
+    if (!(ftp >= 50)) { msg.textContent = 'Enter your FTP to draw your power.'; ready(false); return; }
     const secs = powerClass.len * 60;
     const w = smooth(powerData.watts.slice(0, secs), 15);
     const sx = W / GRAPH.w, sy = H / GRAPH.h;
@@ -1381,7 +1400,7 @@
     g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = font(700, 17); g.fillStyle = '#1e293b';
     g.fillText(parts.join('    '), x0, GRAPH.labelY * sy);
     msg.textContent = powerData.name + ' · ' + new Date(powerData.start).toLocaleString();
-    cv.classList.remove('hidden'); $('powerCopy').disabled = false;
+    ready(true);
   }
   const PINK = '#d4008f';
   function mmss(sec) { const m = Math.floor(sec / 60), s = Math.round(sec % 60); return (m ? m : '') + ':' + String(s).padStart(2, '0'); }
@@ -1413,24 +1432,24 @@
       s ? g.lineTo(x, y) : g.moveTo(x, y);
     }
   }
-  async function sharePower() {
+  async function sharePower(share) {
     const cv = $('powerCanvas');
     const blob = new Promise(res => cv.toBlob(res, 'image/png'));
     try {
-      if (CAN_SHARE) {
+      if (share) {
         const file = new File([await blob], 'my-power.png', { type: 'image/png' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
       }
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      toast('Image copied. Paste it into Discord.');
+      toast('Graph copied. Paste it into Discord.');
     } catch (e) { if (e && e.name !== 'AbortError') toast('Could not copy the image (' + (e.message || e) + ').'); }
   }
 
-  function classButtons(id, first) {
-    return '<div class="btnrow">' + (first || '') +
-      '<a class="btn" href="' + PELOTON_CLASS(id) + '" target="_blank" rel="noopener" title="Open the class in the Peloton app">' + ICON.stack + 'Peloton</a>' +
-      '<a class="btn" href="' + TIMER_TOOL(id) + '" target="_blank" rel="noopener" title="Sourdough timer tool">' + ICON.timer + 'Timer</a>' +
-      '<button onclick="copyImage(\'' + id + '\')" title="Copy the ride graph">' + ICON.graph + 'Graph</button></div>';
+  function classButtons(c, extra) {
+    return '<div class="btnrow">' + graphButton(c) +
+      '<a class="btn" href="' + PELOTON_CLASS(c.id) + '" target="_blank" rel="noopener" title="Open the class in the Peloton app">' + ICON.stack + 'Peloton</a>' +
+      '<a class="btn" href="' + TIMER_TOOL(c.id) + '" target="_blank" rel="noopener" title="Sourdough timer tool">' + ICON.timer + 'Timer</a>' +
+      (extra || '') + '</div>';
   }
   // Puts the ride graph picture on the clipboard. Sourdough's image host doesn't let other sites read its
   // images, so the back end fetches the PNG for us. If that fails, the image link is copied instead.
