@@ -61,8 +61,10 @@
     .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
     .list .zs { height:6px; margin:4px 0 2px; }
     .grid.cal .brainc { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
-    .seg { display:flex; background:#eeeef0; border-radius:9px; padding:2px; margin:0 0 10px; }
-    .seg button { flex:1; border:0; background:transparent; padding:6px 4px; border-radius:7px; font-size:14px; color:#3a3a3c; margin:0; }
+    .listbar { display:flex; align-items:center; gap:10px; margin:0 0 10px; }
+    .seg { display:flex; background:#eeeef0; border-radius:9px; padding:2px; margin-left:auto; }
+    .seg button { border:0; background:transparent; padding:5px 10px; border-radius:7px; font-size:14px; color:#3a3a3c; margin:0; white-space:nowrap; }
+    .seg button:disabled { color:#c7c7cc; cursor:default; }
     .seg button.on { background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.15); font-weight:600; color:#1c1c1e; }
     .trick { font-size:14px; color:#5e4b8b; margin:3px 0; }   /* spinzalot's mind tricks */
     .grid.cal .dom { position:absolute; top:3px; left:6px; font-size:11px; font-weight:500; color:#8e8e93; }
@@ -796,14 +798,20 @@
     $('pSummary').innerHTML = h;
   }
 
-  // "Recently ridden | Release date" switch; tapping the active option reverses it (↓ newest first, ↑ oldest first).
+  // "Ridden | Aired" switch; tapping the active option reverses it (↓ newest first, ↑ oldest first).
+  // With done rides hidden, Ridden is grayed out and Aired is the sort in use.
   function sortSwitch(len, type) {
-    const btn = (key, label) => '<button type="button" class="' + (sortBy === key ? 'on' : '') + '" onclick="setSort(\'' + key + '\',' +
-      len + ',\'' + type + '\')">' + label + (sortBy === key ? (sortAsc ? ' ↑' : ' ↓') : '') + '</button>';
-    return '<div class="seg">' + btn('ridden', 'Recently ridden') + btn('air', 'Release date') + '</div>';
+    const active = showDone ? sortBy : 'air';
+    const btn = (key, label) => {
+      const off = key === 'ridden' && !showDone;
+      return '<button type="button" class="' + (active === key ? 'on' : '') + '"' + (off ? ' disabled title="Tick Show done to sort by when you rode"' : '') +
+        ' onclick="setSort(\'' + key + '\',' + len + ',\'' + type + '\')">' + label + (active === key ? (sortAsc ? ' ↑' : ' ↓') : '') + '</button>';
+    };
+    return '<div class="seg">' + btn('ridden', 'Ridden') + btn('air', 'Aired') + '</div>';
   }
   function setSort(key, len, type) {
-    if (sortBy === key) sortAsc = !sortAsc; else { sortBy = key; sortAsc = false; }
+    const active = showDone ? sortBy : 'air';
+    if (active === key) sortAsc = !sortAsc; else { sortBy = key; sortAsc = false; }
     savePrefs(); pickCell(len, type, true);
   }
   function pickCell(len, type, keepScroll) {
@@ -814,8 +822,8 @@
     //   Recently ridden: done rides first by when you last rode them (gray manual checks, with no ride
     //     date, at the far end), then the rest by air date.
     //   Release date: everything together by air date.
-    // Without done rides, the list is by air date, newest first.
-    const dir = showDone && sortAsc ? -1 : 1;
+    // Without done rides, only Aired applies (Ridden is grayed out); it can still be reversed.
+    const dir = sortAsc ? -1 : 1;
     const cs = all.filter(c => showDone || !c.done).sort((a, b) => {
       if (showDone && sortBy === 'ridden') {
         return (b.done - a.done) || dir * ((b.rodeAt || 0) - (a.rodeAt || 0)) || dir * (b.air - a.air);
@@ -823,10 +831,9 @@
       return dir * (b.air - a.air);
     });
     let h = '<h3 style="margin-top:0">' + len + ' min ' + esc(TYPE_SHORT[type] || type) + '</h3>' +
-            '<div class="toggle" style="margin:0 0 8px"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
+            '<div class="listbar"><div class="toggle" style="margin:0"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
             ' onchange="showDone=this.checked; savePrefs(); pickCell(' + len + ',\'' + type + '\', true)">' +
-            '<label for="lShowDone" style="margin:0">Show rides I\'ve done (' + doneCount + ')</label></div>' +
-            (showDone ? sortSwitch(len, type) : '');
+            '<label for="lShowDone" style="margin:0">Show done (' + doneCount + ')</label></div>' + sortSwitch(len, type) + '</div>';
     if (!cs.length) h += '<p class="muted">All done in this cell! 🎉</p>';
     h += '<div class="list">';
     cs.forEach(c => {
