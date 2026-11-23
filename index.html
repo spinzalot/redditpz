@@ -840,7 +840,7 @@
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + brain(c) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') +
-             (c.done && c.rodeAt ? ' · you rode it ' + new Date(c.rodeAt * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '') + '</div>' +
+             (c.done && c.rodeAt ? ' · Ridden ' + new Date(c.rodeAt * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '') + '</div>' +
            (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + trickLines(c) +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
