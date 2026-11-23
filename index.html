@@ -258,8 +258,8 @@
 
 <script>
   // ----- Configuration -----
-  // Back end: Apps Script by default. Add ?backend=cf to the address to try the Cloudflare Worker on
-  // this device (remembered), and ?backend=gas to go back.
+  // Back end: the Cloudflare Worker. Add ?backend=gas to the address to use the old Apps Script one on
+  // this device (remembered), and ?backend=cf to come back.
   const BACKENDS = {
     gas: 'https://script.google.com/macros/s/AKfycbxUnqC05vMPpmfQze2iGjTp56JnYRDCZ57__vdUnhf4zwpXMOEiktvwDPS5EuE3Kr7b/exec',
     cf: 'https://rpz-worker.spinzalot88.workers.dev/rpz/api',
@@ -267,16 +267,17 @@
   const BACKEND = (() => {
     const want = new URLSearchParams(location.search).get('backend');
     try {
-      if (want === 'cf') localStorage.setItem('rpzBackend', 'cf');
-      if (want === 'gas') localStorage.removeItem('rpzBackend');
-      return localStorage.getItem('rpzBackend') === 'cf' ? 'cf' : 'gas';
-    } catch (e) { return want === 'cf' ? 'cf' : 'gas'; }
+      localStorage.removeItem('rpzBackend');   // the old "try Cloudflare" setting
+      if (want === 'gas') localStorage.setItem('rpzBackend2', 'gas');
+      if (want === 'cf') localStorage.removeItem('rpzBackend2');
+      return localStorage.getItem('rpzBackend2') === 'gas' ? 'gas' : 'cf';
+    } catch (e) { return want === 'gas' ? 'gas' : 'cf'; }
   })();
   const API_URL = BACKENDS[BACKEND];
-  if (BACKEND === 'cf') addEventListener('DOMContentLoaded', () => {   // so it's obvious which one you're on
+  if (BACKEND === 'gas') addEventListener('DOMContentLoaded', () => {   // so it's obvious when you're on the old one
     const tag = document.createElement('div');
-    tag.textContent = 'Cloudflare';
-    tag.title = 'Using the Cloudflare back end. Add ?backend=gas to the address to switch back.';
+    tag.textContent = 'Apps Script';
+    tag.title = 'Using the old Apps Script back end. Add ?backend=cf to the address to switch back.';
     tag.style.cssText = 'position:fixed;right:6px;bottom:6px;z-index:99;font:600 11px system-ui;padding:2px 7px;' +
       'border-radius:9px;background:#f38020;color:#fff;opacity:.85;pointer-events:none';
     document.body.appendChild(tag);
@@ -370,7 +371,7 @@
     const t0 = performance.now();
     const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ action: action, token: token }, payload || {})) });
     const j = await res.json();
-    const line = (BACKEND === 'cf' ? '[CF] ' : '') + action + ': ' + Math.round(performance.now() - t0) + ' ms total' +
+    const line = (BACKEND === 'gas' ? '[GAS] ' : '') + action + ': ' + Math.round(performance.now() - t0) + ' ms total' +
                  (j.ms !== undefined ? ', ' + j.ms + ' ms in script' : '') +
                  (j.authMs !== undefined ? ' (sign-in check ' + j.authMs + ')' : '') +
                  (j.d1 ? ' · D1 ' + j.d1.trips + ' trip' + (j.d1.trips === 1 ? '' : 's') + ', ' +
