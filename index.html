@@ -86,11 +86,13 @@
     /* Scrolling to a panel stops below the sticky title bar. */
     #pList, #bList { scroll-margin-top:56px; }
     #pListEmpty { display:none; }
-    /* Tablets and computers: calendar on the left, the tapped class and its graph on the right, each scrolling on its own. */
-    @media (min-width: 900px) {
+    /* Tablets, computers and phones held sideways: calendar on the left, the tapped class and its graph on the right,
+       each scrolling on its own. */
+    @media (min-width: 900px), (orientation: landscape) and (min-width: 600px) {
       body.wideProgress main { max-width:1400px; }
       body.wideProgress #pProgress { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:16px; align-items:start; }
-      body.wideProgress #pRight { position:sticky; top:64px; max-height:calc(100vh - 80px); overflow-y:auto; overscroll-behavior:contain; }
+      body.wideProgress #pRight { position:sticky; top:64px; max-height:calc(100vh - 80px); max-height:calc(100dvh - 80px);
+                                  overflow-y:auto; overscroll-behavior:contain; }
       body.wideProgress #pRight .card:first-child { margin-top:0; }
       body.wideProgress #pListEmpty { display:block; }
       body.wideProgress #pListEmpty:has(+ #pList:not(.hidden)) { display:none; }
@@ -507,7 +509,7 @@
     $('sTricks').checked = showTricks;
   }
 
-  const WIDE = matchMedia('(min-width: 900px)');
+  const WIDE = matchMedia('(min-width: 900px), (orientation: landscape) and (min-width: 600px)');
   // Brings the class details into view: on wide screens by resetting the right-hand pane, on phones by scrolling to it.
   function showListPanel() {
     if (WIDE.matches) $('pRight').scrollTop = 0;
