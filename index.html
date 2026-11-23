@@ -98,6 +98,15 @@
                                   overflow-y:auto; overscroll-behavior:contain; }
       body.wideProgress #pRight .card:first-child { margin-top:0; }
       body.wideProgress #pListEmpty { display:block; }
+    }
+    /* Phones held sideways: each half is about phone-portrait width, so trim the outer spacing a little
+       and the class buttons fit on one line (iPhone 12 and later). */
+    @media (orientation: landscape) and (max-height: 500px) and (min-width: 600px) {
+      body.wideProgress main { padding:10px; }
+      body.wideProgress #pProgress { gap:10px; }
+      body.wideProgress .card { padding:12px; }
+      body.wideProgress .btnrow { gap:4px; }
+      body.wideProgress .btnrow button, body.wideProgress .btnrow .btn { padding:7px 6px; }
       body.wideProgress #pListEmpty:has(+ #pList:not(.hidden)) { display:none; }
     }
     #powerBox { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-end; justify-content:center; }
