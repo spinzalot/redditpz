@@ -61,6 +61,9 @@
     .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
     .list .zs { height:6px; margin:4px 0 2px; }
     .grid.cal .brainc { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
+    .seg { display:flex; background:#eeeef0; border-radius:9px; padding:2px; margin:0 0 10px; }
+    .seg button { flex:1; border:0; background:transparent; padding:6px 4px; border-radius:7px; font-size:14px; color:#3a3a3c; margin:0; }
+    .seg button.on { background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.15); font-weight:600; color:#1c1c1e; }
     .trick { font-size:14px; color:#5e4b8b; margin:3px 0; }   /* spinzalot's mind tricks */
     .grid.cal .dom { position:absolute; top:3px; left:6px; font-size:11px; font-weight:500; color:#8e8e93; }
     .grid.cal .dom.mon { color:var(--ink); font-weight:700; }
@@ -288,6 +291,7 @@
   const PROFILE_IMG = id => 'https://cdn.sourdoughrides.com/' + id + '/full_graph.svg';
 
   let token = null, me = null, progress = null, selCell = null, showDone = false;
+  let sortBy = 'ridden', sortAsc = false;   // ride lists with done rides shown: 'ridden' or 'air'; newest first unless sortAsc
   let buddies = null, shown = [];
   // Last data per challenge, so tabs draw instantly and refresh in the background.
   let cache = { progress: {}, buddies: {} };
@@ -492,7 +496,7 @@
   function loadPrefs() { try { return JSON.parse(localStorage.getItem('rpzPrefs') || '{}'); } catch (e) { return {}; } }
   function savePrefs() {
     const prefs = { challenge: $('cChallenge').value, retired: $('pRetired').checked, programs: $('pPrograms').checked,
-                    showDone: showDone, picked: [...picked], friendsOnly: $('bFriendsOnly').checked, zones: showZones, tricks: showTricks };
+                    showDone: showDone, sortBy: sortBy, sortAsc: sortAsc, picked: [...picked], friendsOnly: $('bFriendsOnly').checked, zones: showZones, tricks: showTricks };
     try { localStorage.setItem('rpzPrefs', JSON.stringify(prefs)); } catch (e) {}
   }
   function applyPrefs() {
@@ -502,6 +506,8 @@
     if (typeof p.retired === 'boolean') $('pRetired').checked = p.retired;
     if (typeof p.programs === 'boolean') $('pPrograms').checked = p.programs;
     if (typeof p.showDone === 'boolean') showDone = p.showDone;
+    if (p.sortBy === 'air' || p.sortBy === 'ridden') sortBy = p.sortBy;
+    sortAsc = p.sortAsc === true;
     (p.picked || []).forEach(u => picked.add(u));
     $('bFriendsOnly').checked = p.friendsOnly === true;
     showZones = p.zones === true;
@@ -781,18 +787,37 @@
     $('pSummary').innerHTML = h;
   }
 
+  // "Recently ridden | Release date" switch; tapping the active option reverses it (↓ newest first, ↑ oldest first).
+  function sortSwitch(len, type) {
+    const btn = (key, label) => '<button type="button" class="' + (sortBy === key ? 'on' : '') + '" onclick="setSort(\'' + key + '\',' +
+      len + ',\'' + type + '\')">' + label + (sortBy === key ? (sortAsc ? ' ↑' : ' ↓') : '') + '</button>';
+    return '<div class="seg">' + btn('ridden', 'Recently ridden') + btn('air', 'Release date') + '</div>';
+  }
+  function setSort(key, len, type) {
+    if (sortBy === key) sortAsc = !sortAsc; else { sortBy = key; sortAsc = false; }
+    savePrefs(); pickCell(len, type, true);
+  }
   function pickCell(len, type, keepScroll) {
     selCell = len + '|' + type; renderProgress();
     const all = progress.classes.filter(c => c.len === len && c.type === type);
     const doneCount = all.filter(c => c.done).length;
-    // With done rides shown: done first, most recently ridden at the top (gray manual checks, which have
-    // no ride date, after those), then the rest by newest air date.
-    const cs = all.filter(c => showDone || !c.done)
-      .sort((a, b) => (b.done - a.done) || ((b.rodeAt || 0) - (a.rodeAt || 0)) || (b.air - a.air));
+    // With done rides shown, two sorts (tap the active one again to reverse it):
+    //   Recently ridden: done rides first by when you last rode them (gray manual checks, with no ride
+    //     date, at the far end), then the rest by air date.
+    //   Release date: everything together by air date.
+    // Without done rides, the list is by air date, newest first.
+    const dir = showDone && sortAsc ? -1 : 1;
+    const cs = all.filter(c => showDone || !c.done).sort((a, b) => {
+      if (showDone && sortBy === 'ridden') {
+        return (b.done - a.done) || dir * ((b.rodeAt || 0) - (a.rodeAt || 0)) || dir * (b.air - a.air);
+      }
+      return dir * (b.air - a.air);
+    });
     let h = '<h3 style="margin-top:0">' + len + ' min ' + esc(TYPE_SHORT[type] || type) + '</h3>' +
             '<div class="toggle" style="margin:0 0 8px"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
             ' onchange="showDone=this.checked; savePrefs(); pickCell(' + len + ',\'' + type + '\', true)">' +
-            '<label for="lShowDone" style="margin:0">Show rides I\'ve done (' + doneCount + ')</label></div>';
+            '<label for="lShowDone" style="margin:0">Show rides I\'ve done (' + doneCount + ')</label></div>' +
+            (showDone ? sortSwitch(len, type) : '');
     if (!cs.length) h += '<p class="muted">All done in this cell! 🎉</p>';
     h += '<div class="list">';
     cs.forEach(c => {
