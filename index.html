@@ -1454,7 +1454,9 @@
       '<label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="powerMine" checked onchange="showMine=this.checked; drawPower()">My power</label>' +
       '<label for="powerFtp" style="margin:0 0 0 8px">FTP</label>' +
       '<input id="powerFtp" type="number" inputmode="numeric" min="50" max="600" value="' + (ftp || st.ftp || '') + '"' +
-      ' style="width:80px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px" oninput="drawPower()"></div>' +
+      ' style="width:80px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px" oninput="drawPower()">' +
+      '<label style="margin:0 0 0 8px;display:flex;align-items:center;gap:6px" title="Zone watts on the graph. They give away your FTP, so they\'re off unless you turn them on.">' +
+      '<input type="checkbox" id="powerWatts"' + (showWatts ? ' checked' : '') + ' onchange="setWatts(this.checked)">Watts</label></div>' +
       '<div class="row pwrBtns"><button class="primary" id="powerCopy" disabled onclick="sharePower(false)">Copy</button>' +
       (CAN_SHARE ? '<button id="powerShare" disabled onclick="sharePower(true)">Share</button>' : '') + '</div></div>';
     box.onclick = closePower;
@@ -1494,6 +1496,24 @@
   }
   const powerCache = new Map();
   let showMine = true, powerFailed = '';
+  // Zone watts on the graph: off by default because they give away FTP; what's on screen is what gets copied.
+  let showWatts = false; try { showWatts = localStorage.getItem('rpzWatts') === '1'; } catch (e) {}
+  function setWatts(on) { showWatts = on; try { localStorage.setItem('rpzWatts', on ? '1' : '0'); } catch (e) {} drawPower(); }
+  /** The watts at each zone boundary, on small white tags just inside the graph's right edge. */
+  function drawWatts(g, W, H, ftp) {
+    if (!showWatts || !(ftp >= 50)) return;
+    const sx = W / GRAPH.w, sy = H / GRAPH.h, x = (GRAPH.right - 4) * sx;
+    g.save(); g.font = '700 ' + Math.round(12 * sy) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (let z = 1; z <= 6; z++) {
+      const y = (GRAPH.bottom - (GRAPH.bottom - GRAPH.top) * z / 7) * sy, t = String(Math.round(ftp * ZONE_PCT[z] / 100));
+      const tw = g.measureText(t).width, px = 3 * sx, ph = 8 * sy;
+      g.fillStyle = '#ffffff'; g.beginPath();
+      if (g.roundRect) g.roundRect(x - tw - px, y - ph, tw + 2 * px, 2 * ph, 3 * sy); else g.rect(x - tw - px, y - ph, tw + 2 * px, 2 * ph);
+      g.fill(); g.fillStyle = '#334155'; g.fillText(t, x, y);
+    }
+    g.restore();
+  }
   function closePower() { powerClass = null; const b = $('powerBox'); if (b) b.remove(); }
   function drawPower() {
     const cv = $('powerCanvas'); if (!cv || !powerImg || !powerImg.complete) return;
@@ -1506,9 +1526,9 @@
     const ready = on => { $('powerCopy').disabled = !on; if ($('powerShare')) $('powerShare').disabled = !on; };
     cv.classList.remove('hidden');
     if (!showMine || powerFailed) {   // Sourdough's graph on its own
-      powerStatus(powerFailed); ready(true); return;
+      drawWatts(g, W, H, ftp); powerStatus(powerFailed); ready(true); return;
     }
-    if (!powerData) { powerStatus('Getting your ride from Strava...'); ready(true); return; }
+    if (!powerData) { drawWatts(g, W, H, ftp); powerStatus('Getting your ride from Strava...'); ready(true); return; }
     if (!(ftp >= 50)) { powerStatus('Enter your FTP to draw your power.'); ready(false); return; }
     const secs = powerClass.len * 60;
     const w = smooth(powerData.watts.slice(0, secs), 15);
@@ -1520,6 +1540,7 @@
     g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth *= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
     g.strokeStyle = PINK; g.lineWidth /= 2.2; tracePath(g, w, secs, x0, x1, yOf, ftp); g.stroke();
     g.restore();
+    drawWatts(g, W, H, ftp);
     const raw = powerData.watts.slice(0, secs);
     const st = rideStats(raw, ftp);
     const font = (weight, px) => weight + ' ' + Math.round(px * sy) + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
