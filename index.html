@@ -193,6 +193,25 @@
     .chips { display:flex; flex-wrap:wrap; gap:8px; }
     .chips button { font-size:14px; padding:6px 12px; border-radius:16px; }
     .chips button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+    /* Buddies on Progress */
+    #pBuddyBar { padding:10px 14px; }
+    .bbTop { display:flex; align-items:center; gap:10px; }
+    .bbTop b { white-space:nowrap; }
+    .bbTop .bbFo { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:13px; white-space:nowrap; }
+    .bbTop .bbFo input { margin:0; }
+    .bbGear { background:none; border:none; padding:2px 4px; font-size:16px; cursor:pointer; }
+    #pBuddyBar .chips { margin-top:8px; gap:6px; }
+    #pBuddyBar .chips button { max-width:9.5em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:5px 11px; font-size:13px; }
+    .bbHint { font-size:12px; margin-top:6px; }
+    .switch { position:relative; display:inline-block; width:40px; height:24px; flex:0 0 auto; }
+    .switch input { opacity:0; width:0; height:0; }
+    .switch span { position:absolute; inset:0; background:#d1d1d6; border-radius:12px; transition:background .15s; cursor:pointer; }
+    .switch span::before { content:''; position:absolute; width:20px; height:20px; left:2px; top:2px; background:#fff; border-radius:50%; transition:transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+    .switch input:checked + span { background:#16a34a; }
+    .switch input:checked + span::before { transform:translateX(16px); }
+    .grid td.cell { position:relative; }
+    .bud { position:absolute; bottom:1px; right:3px; font-size:10px; line-height:1; color:#1d4ed8; font-weight:700; }
+    .budLine { font-size:14px; margin-top:4px; }
     .list .item { border-top:1px solid var(--line); padding:10px 0; }
     .list .item:first-child { border-top:none; }
     .list .title { font-weight:600; }
@@ -311,6 +330,7 @@
       <div class="card hidden" id="pRide"></div>
       <div class="card hidden" id="pSyncPrompt"></div>
       <div class="card hidden" id="pSynced"></div>
+      <div class="card" id="pBuddyBar"></div>
       <div class="card" id="pSummary"><span class="muted">Loading...</span></div>
       </div>
       <div id="pRight">
@@ -719,7 +739,7 @@
     lastChallenge = $('cChallenge').value;
     savePrefs();
     selCell = null; $('pList').classList.add('hidden');
-    if (currentTab === 'Progress') loadProgress();
+    if (currentTab === 'Progress') { loadProgress(); if (buddyOn) loadBuddyData(); }
     if (currentTab === 'Buddies') loadBuddies();
     prefetch();
   }
@@ -766,7 +786,7 @@
     });
     $('gearBtn').classList.toggle('on', name === 'Settings');
     $('syncIcon').classList.toggle('on', name === 'Sync');
-    if (name === 'Progress') loadProgress();
+    if (name === 'Progress') { loadProgress(); renderBuddyBar(); }
     if (name === 'Buddies') { renderSettingsSummary(); loadBuddies(); }
     if (name === 'Settings') {
       $('setName').textContent = me.rider ? me.rider.pelotonUsername : '';
@@ -1003,7 +1023,7 @@
         h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : (other ? ' other' : '')) + (selCell === key ? ' sel' : inGroup(w, d) ? ' insel' : '') + (cn.today ? ' today' : '') +
              '" data-week="' + w + '" data-slot="' + esc(d) + '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
              cn.html + (done ? '✓' : other ? '↺' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') +
-             noteIcon(cs) +
+             noteIcon(cs) + budBadge(cs) +
              zoneStrip(cs) + '</td>';
       });
       h += '</tr>';
@@ -1056,10 +1076,10 @@
       h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') :
                                                          (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + (c.manual ? ' · marked done by you' : '') + '</div>' +
-           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + notesBlock(c) +
+           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + buddyLine(c) + notesBlock(c) +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
-           classButtons(c) +
+           classButtons(c, buddyBtn(c)) +
            '</div>';
     });
     h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
@@ -1084,7 +1104,7 @@
         const d = cs.filter(c => c.done).length;
         const key = len + '|' + t;
         h += '<td class="cell' + (d === cs.length ? ' complete' : '') + (selCell === key ? ' sel' : inGroup(len, t) ? ' insel' : '') +
-             '" onclick="pickCell(' + len + ',\'' + t + '\')">' + d + '/' + cs.length + '</td>';
+             '" onclick="pickCell(' + len + ',\'' + t + '\')">' + d + '/' + cs.length + budBadge(cs) + '</td>';
       });
       h += '</tr>';
     });
@@ -1192,10 +1212,10 @@
            '<div class="muted">' + (where ? where(c) + ' · ' + (c.instructor ? esc(c.instructor) + ' · ' : '') : '') +
              (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') +
              (c.done && c.rodeAt ? ' · Ridden ' + day(c.rodeAt) : (c.manual ? ' · marked done by you' : '')) + '</div>' +
-           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + notesBlock(c) +
+           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + buddyLine(c) + notesBlock(c) +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
-           classButtons(c) +
+           classButtons(c, buddyBtn(c)) +
            '</div>';
     });
     h += '</div>';
@@ -1533,7 +1553,8 @@
   }
   function toggleBuddy(u) {
     picked.has(u) ? picked.delete(u) : picked.add(u);
-    savePrefs(); renderChips(); renderBuddies();
+    savePrefs();
+    if (currentTab === 'Progress') { renderBuddyBar(); redrawBuddies(); } else { renderChips(); renderBuddies(); }
   }
 
   function renderBuddies() {
@@ -1638,6 +1659,82 @@
     return /^\d{15,21}$/.test(discord) ? '<@' + discord + '>' : '@' + discord;
   }
 
+  // ----- Buddies on Progress -----
+  // A 👥 bar above the tiles. Off at the start of every visit (the default view is just you); the names you
+  // pick are remembered. On: tiles count the buddies who still need a class there, class lists name them.
+  let buddyOn = false;
+  function renderBuddyBar() {
+    const box = $('pBuddyBar'); if (!box || !me || !me.rider) return;
+    const fo = $('bFriendsOnly').checked;
+    let h = '<div class="bbTop"><b>👥 Buddies</b><label class="switch" title="Show who else still needs each class">' +
+      '<input type="checkbox"' + (buddyOn ? ' checked' : '') + ' onchange="setBuddyOn(this.checked)"><span></span></label>';
+    if (buddyOn) h += '<label class="bbFo"><input type="checkbox"' + (fo ? ' checked' : '') + ' onchange="setFriendsOnly(this.checked)">Friends only</label>' +
+      '<button type="button" class="bbGear" title="Buddy settings" onclick="showTab(\'Settings\', \'setBuddies\')">⚙</button>';
+    h += '</div>';
+    if (buddyOn) {
+      if (!buddies) h += '<div class="muted bbHint">Loading...</div>';
+      else {
+        const list = chipRiders();
+        h += list.length
+          ? '<div class="chips">' + list.map(r => '<button type="button" title="' + esc(r.username) + '" class="' + (picked.has(r.username) ? 'on' : '') +
+              '" onclick="toggleBuddy(\'' + esc(r.username).replace(/\\/g, '') + '\')">' + esc(r.username) + '</button>').join('') + '</div>' +
+            '<div class="muted bbHint">' + (picked.size ? 'Riding with ' + picked.size + '. Tap a name to drop it.' : 'Tap names to ride with them; none picked counts everyone shown.') + '</div>'
+          : '<div class="muted bbHint">' + (buddies.riders.length ? 'Add friends in Settings ⚙ to pick riders here.' : 'No other riders are sharing with you yet.') + '</div>';
+      }
+    }
+    box.innerHTML = h;
+  }
+  function setBuddyOn(on) {
+    buddyOn = on; renderBuddyBar();
+    if (on) loadBuddyData(); else redrawBuddies();
+  }
+  function setFriendsOnly(on) { $('bFriendsOnly').checked = on; savePrefs(); renderBuddyBar(); redrawBuddies(); }
+  async function loadBuddyData() {
+    const id = $('cChallenge').value;
+    const done = d => { if ($('cChallenge').value !== id) return; buddies = d;
+      [...picked].forEach(u => { if (!buddies.riders.some(r => r.username === u)) picked.delete(u); });
+      renderBuddyBar(); redrawBuddies(); };
+    if (cache.buddies[id]) done(cache.buddies[id]); else buddies = null;
+    renderBuddyBar();
+    if (isFresh('buddies', id)) return;
+    try { done(await fetchData('buddies', id)); } catch (e) { showError(e); }
+  }
+  function redrawBuddies() {   // tiles and the open class list
+    if (progress) { renderProgress(); repick(true); }
+    if (currentTab === 'Buddies' && buddies) { renderChips(); renderBuddies(); }
+  }
+  // Who counts: the names picked, else friends (Friends only) or everyone sharing with me.
+  function buddyPool() {
+    if (picked.size) return picked;
+    const fo = $('bFriendsOnly').checked;
+    return new Set(buddies.riders.filter(r => !fo || r.friend).map(r => r.username));
+  }
+  let budIdx = null, budFor = null;
+  function needersOf(c) {
+    if (!buddies) return c.buddies || [];
+    if (budFor !== buddies) { budIdx = new Map(buddies.classes.map(x => [x.id, x.buddies])); budFor = buddies; }
+    const pool = buddyPool();
+    return (budIdx.get(c.id) || []).filter(u => pool.has(u));
+  }
+  function budBadge(cs) {
+    if (!buddyOn || !buddies) return '';
+    const who = new Set(); cs.forEach(c => { if (!c.done) needersOf(c).forEach(u => who.add(u)); });
+    return who.size ? '<span class="bud" title="' + who.size + ' buddies still need a class here">👥' + who.size + '</span>' : '';
+  }
+  function buddyLine(c) {
+    if (!buddyOn || !buddies || c.done) return '';
+    const n = needersOf(c);
+    return '<div class="budLine">' + (n.length ? '👥 Still need it: ' + n.map(esc).join(', ') : '<span class="muted">👥 No buddies need this one.</span>') + '</div>';
+  }
+  function buddyBtn(c) {
+    return '<button type="button" onclick="buddyPostId(\'' + c.id + '\')">' + POST_LABEL + '</button>';
+  }
+  async function buddyPostId(id) {
+    const c = progress.classes.find(x => x.id === id); if (!c) return;
+    if (!buddies) { try { buddies = await fetchData('buddies', $('cChallenge').value); } catch (e) { return showError(e); } }
+    buddyPostFor(c);
+  }
+
   // ----- Share a buddy post: pick the time when you share -----
   let postIdx = null, lastWhen = null;
   function nextAt(dow, hour) {           // dow: 0 = Sunday ... 6 = Saturday, or null for "the next time it's this hour"
@@ -1651,8 +1748,10 @@
     const p = n => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
-  function copyPost(i) {
-    postIdx = i;
+  function copyPost(i) { buddyPostFor(shown[i]); }
+  let postClass = null;
+  function buddyPostFor(c) {
+    postClass = c;
     const seven = nextAt(null, 19);
     const tomorrow6 = new Date(); tomorrow6.setDate(tomorrow6.getDate() + 1); tomorrow6.setHours(6, 0, 0, 0);
     const choices = [
@@ -1664,7 +1763,7 @@
     box.id = 'whenBox';
     box.innerHTML = '<div class="sheet" onclick="event.stopPropagation()">' +
       '<h3 style="margin:0 0 4px">When are you riding?</h3>' +
-      '<div class="muted" style="margin-bottom:10px">' + esc(shown[i].title) + '</div>' +
+      '<div class="muted" style="margin-bottom:10px">' + esc(c.title) + '</div>' +
       '<div class="chips">' + choices.map(c => '<button type="button" data-when="' + toLocalInput(c[1]) +
         '" onclick="pickWhen(this)">' + c[0] + '</button>').join('') + '</div>' +
       '<label for="whenAt">Or pick a day and time</label>' +
@@ -1682,7 +1781,7 @@
   function closeWhen() { const b = $('whenBox'); if (b) b.remove(); }
 
   async function sendPost() {
-    const c = shown[postIdx];
+    const c = postClass;
     const v = $('whenAt').value;
     const when = v ? Math.floor(new Date(v).getTime() / 1000) : null;
     if (!when) return;
@@ -1690,7 +1789,7 @@
     closeWhen();
     const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     const discordOf = u => (buddies.riders.find(r => r.username === u) || {}).discord;
-    const who = picked.size ? [...picked] : c.buddies;   // mention the chosen group, else everyone who needs it
+    const who = picked.size ? [...picked] : needersOf(c);   // mention the chosen group, else everyone who needs it
     const names = who.map(u => mention(discordOf(u), u));
     const lines = [
       '🚴 Ride buddy call: ' + c.title + (c.instructor ? ' with ' + c.instructor : '') +
