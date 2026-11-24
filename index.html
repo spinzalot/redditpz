@@ -100,7 +100,15 @@
     .setHead { display:flex; align-items:center; justify-content:space-between; margin:4px 0 8px; }
     .setHead h2 { margin:0; font-size:20px; }
     .setX { width:36px; height:36px; padding:0; border-radius:50%; font-size:16px; }
-    .card.set h3 { margin:0 0 8px; font-size:16px; }
+    details.card.set { padding:0; }
+    details.card.set > summary { list-style:none; display:flex; align-items:center; gap:10px; padding:14px 16px; cursor:pointer; }
+    details.card.set > summary::-webkit-details-marker { display:none; }
+    details.card.set > summary::after { content:'›'; margin-left:auto; color:var(--muted); font-size:20px; line-height:1; transition:transform .15s; }
+    details.card.set[open] > summary::after { transform:rotate(90deg); }
+    .card.set h3 { margin:0; font-size:16px; white-space:nowrap; flex:0 0 auto; }
+    .setSum { color:var(--muted); font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+    .setBody { padding:0 16px 14px; }
+    .card.set { margin:0 0 8px; }
     .card.set button:not(.sbtn) { font-size:13px; padding:5px 12px; }
     .card.set .list .item { padding:6px 0; }
     .card.set .toggle { margin:4px 0; }
@@ -305,28 +313,24 @@
 
     <div id="pSettings" class="hidden">
       <div class="setHead"><h2>Settings</h2><button type="button" class="setX" onclick="closeSettings()" aria-label="Close settings">✕</button></div>
-
-      <div class="card set">
-        <h3>Account</h3>
-        <div class="setRow"><span><span class="dotOn"></span><b id="setName"></b></span><button onclick="signOut()">Sign out</button></div>
-        <div id="sSignins" class="hidden"><div class="setSub">Sign in with</div><div id="sSigninsBody"></div></div>
-      </div>
-
-      <div class="card set">
-        <h3>Classes</h3>
+      <details class="card set" name="settings" id="setClasses" ontoggle="setToggled(this)">
+        <summary><h3>Classes</h3><span class="setSum" id="sumClasses"></span></summary>
+        <div class="setBody">
         <div class="toggle"><input type="checkbox" id="pRetired" onchange="filtersChanged()"><label for="pRetired">Show retired classes I've done</label></div>
         <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="filtersChanged()"><label for="pPrograms">Show Peloton program rides</label></div>
-      </div>
-
-      <div class="card set">
-        <h3>Ride notes</h3>
+        </div>
+      </details>
+      <details class="card set" name="settings" id="setNotes" ontoggle="setToggled(this)">
+        <summary><h3>Ride notes</h3><span class="setSum" id="sumNotes"></span></summary>
+        <div class="setBody">
         <div class="toggle"><input type="checkbox" id="nRec" onchange="setNoteType('recommendation', this.checked)"><label for="nRec">🧠 Recommendations</label></div>
         <div class="toggle"><input type="checkbox" id="nInfo" onchange="setNoteType('info', this.checked)"><label for="nInfo">ℹ️ Info</label></div>
         <div class="toggle"><input type="checkbox" checked disabled><label class="muted">⚠️ Warnings and data issues (always on)</label></div>
-      </div>
-
-      <div class="card set" id="setBuddies">
-        <h3>Buddies</h3>
+        </div>
+      </details>
+      <details class="card set" name="settings" id="setBuddies" ontoggle="setToggled(this)">
+        <summary><h3>Buddies</h3><span class="setSum" id="sumBuddies"></span></summary>
+        <div class="setBody">
         <div class="setSub">Who can see me</div>
         <div class="row" style="gap:16px;margin:2px 0 10px">
           <label class="radio"><input type="radio" name="bVis" value="Everyone" onchange="saveSettings()"> Everyone</label>
@@ -349,14 +353,24 @@
         <div id="fList" class="chips"></div>
         <input id="fQ" type="text" autocomplete="off" autocapitalize="off" placeholder="Add a friend: search Peloton usernames" oninput="friendSearch()" style="margin-top:6px">
         <div id="fResults" class="list" style="margin-top:6px"></div>
-      </div>
-
-      <div class="card set" id="sStrava">
-        <h3>Strava</h3>
+        </div>
+      </details>
+      <details class="card set" name="settings" id="sStrava" ontoggle="setToggled(this)">
+        <summary><h3>Strava</h3><span class="setSum" id="sumStrava"></span></summary>
+        <div class="setBody">
         <p class="muted" style="margin:0 0 6px">Your power on ride graphs. Only you see it.</p>
         <div id="sStravaBody"></div>
-      </div>
+        </div>
+      </details>
+      <details class="card set" name="settings" id="setAccount" ontoggle="setToggled(this)">
+        <summary><h3>Account</h3><span class="setSum" id="sumAccount"></span></summary>
+        <div class="setBody">
+        <div class="setRow"><span class="muted" style="font-size:14px">Signed in as <b id="setName"></b></span><button onclick="signOut()">Sign out</button></div>
+        <div id="sSignins" class="hidden"><div class="setSub">Sign in with</div><div id="sSigninsBody"></div></div>
+        </div>
+      </details>
     </div>
+
   </section>
   <pre id="dbg" class="hidden" style="margin-top:16px;font-size:12px"></pre>
   <p id="dbgClear" class="hidden"><button style="font-size:13px" onclick="timings=[];try{localStorage.removeItem('rpzTimings')}catch(e){};showTimings()">Clear timings</button></p>
@@ -506,6 +520,7 @@
     });
     $('sSigninsBody').innerHTML = h + '</div>';
     $('sSignins').classList.remove('hidden');
+    updateSetSummaries();
     if (!has.has('google') && window.google && google.accounts) {
       googleMode = 'link';
       google.accounts.id.renderButton($('gLinkBtn'), { theme: 'outline', size: 'medium', text: 'continue_with' });
@@ -727,11 +742,28 @@
     if (name === 'Settings') {
       $('setName').textContent = me.rider ? me.rider.pelotonUsername : '';
       fillSettings();
-      if (scrollTo) setTimeout(() => $(scrollTo).scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
-      else window.scrollTo(0, 0);
+      document.querySelectorAll('#pSettings > details').forEach(d => { d.open = d.id === scrollTo; });
+      updateSetSummaries();
+      window.scrollTo(0, 0);
     }
   }
   function closeSettings() { showTab(lastTab); }
+  // Settings sections: one open at a time; each collapsed row says what's set inside it.
+  function setToggled(d) {
+    if (d.open) document.querySelectorAll('#pSettings > details[open]').forEach(o => { if (o !== d) o.open = false; });
+  }
+  function updateSetSummaries() {
+    if (!me || !me.rider || !$('sumClasses')) return;
+    $('sumClasses').textContent = 'Program rides ' + ($('pPrograms').checked ? 'on' : 'off') + ' · retired ' + ($('pRetired').checked ? 'on' : 'off');
+    $('sumNotes').textContent = ['recommendation', 'info'].filter(t => noteTypes[t] !== false).map(t => NOTE_TYPES[t].icon).concat('⚠️').join(' ');
+    const vis = { Everyone: 'everyone', Friends: 'friends', Nobody: 'just me' }[me.rider.visibility];
+    const n = (me.friends || []).length;
+    $('sumBuddies').textContent = [vis && 'Seen by ' + vis, n + ' friend' + (n === 1 ? '' : 's'), me.rider.discordName ? '' : 'no Discord ID'].filter(Boolean).join(' · ');
+    const st = me.rider.strava || {};
+    $('sumStrava').textContent = st.connected ? 'Connected' + (st.name ? ' as ' + st.name : '') : 'Not connected';
+    const ins = (me.signins || []).map(x => providerName(x.provider));
+    $('sumAccount').textContent = me.rider.pelotonUsername + (ins.length ? ' · ' + ins.join(', ') : '');
+  }
   (function () {   // keep --hdrH equal to the header's height (it grows when the picker wraps below the title)
     const h = document.querySelector('header'), set = () => document.documentElement.style.setProperty('--hdrH', h.offsetHeight + 'px');
     set(); if (window.ResizeObserver) new ResizeObserver(set).observe(h); else addEventListener('resize', set);
@@ -789,7 +821,7 @@
     });
   }
   function filtersChanged() {
-    savePrefs();
+    savePrefs(); updateSetSummaries();
     if (progressRaw) { applyProgressFilters(); renderProgress(); }
     if (buddies) renderBuddies();
   }
@@ -880,7 +912,7 @@
         '</div>').join('') + '</div>';
   }
   function toggleNotes() { notesOpen = !notesOpen; document.body.classList.toggle('notesOpen', notesOpen); savePrefs(); }
-  function setNoteType(type, on) { noteTypes[type] = on; savePrefs(); if (progress) renderProgress(); if (buddies) renderBuddies(); }
+  function setNoteType(type, on) { noteTypes[type] = on; savePrefs(); updateSetSummaries(); if (progress) renderProgress(); if (buddies) renderBuddies(); }
 
   // Title row: score on the left, the Zones switch on the right (same line).
   function titleRow(p, pct) {
@@ -1389,6 +1421,7 @@
     const n = (me.friends || []).length;
     $('bSumm').textContent = [vis && 'seen by ' + vis, n + ' friend' + (n === 1 ? '' : 's'), me.rider.discordName ? '' : 'no Discord ID']
       .filter(Boolean).join(' · ');
+    updateSetSummaries();
   }
 
   // ----- Friends -----
@@ -1542,6 +1575,7 @@
   const APP_URL = location.origin + location.pathname;
   function renderStrava() {
     const st = (me.rider && me.rider.strava) || {};
+    setTimeout(updateSetSummaries, 0);
     $('sStravaBody').innerHTML = st.connected
       ? '<p style="margin:0 0 8px">Connected' + (st.name ? ' as <b>' + esc(st.name) + '</b>' : '') + '.</p>' +
         '<button onclick="disconnectStrava()">Disconnect Strava</button>'
