@@ -1072,19 +1072,28 @@
   // "Ridden | Aired" switch; tapping the active option reverses it (↓ newest first, ↑ oldest first).
   // With done rides hidden, Ridden is grayed out and Aired is the sort in use.
   function sortSwitch() {
-    const active = showDone ? sortBy : 'air';
+    const active = listSort ? (listSort.by === 'schedule' ? '' : showDone ? listSort.by : 'air') : (showDone ? sortBy : 'air');
+    const asc = listSort ? listSort.asc : sortAsc;
     const btn = (key, label) => {
       const off = key === 'ridden' && !showDone;
       return '<button type="button" class="' + (active === key ? 'on' : '') + '"' + (off ? ' disabled title="Tick Show done to sort by when you rode"' : '') +
-        ' onclick="setSort(\'' + key + '\')">' + label + (active === key ? (sortAsc ? ' ↑' : ' ↓') : '') + '</button>';
+        ' onclick="setSort(\'' + key + '\')">' + label + (active === key ? (asc ? ' ↑' : ' ↓') : '') + '</button>';
     };
     return '<div class="seg">' + btn('ridden', 'Ridden') + btn('air', 'Aired') + '</div>';
   }
   function setSort(key) {
+    if (listSort) {   // a program week / weekday / whole program: this list only, not saved
+      const active = listSort.by === 'schedule' ? '' : showDone ? listSort.by : 'air';
+      if (active === key) listSort.asc = !listSort.asc; else listSort = { by: key, asc: false };
+      return repick(true);
+    }
     const active = showDone ? sortBy : 'air';
     if (active === key) sortAsc = !sortAsc; else { sortBy = key; sortAsc = false; }
     savePrefs(); repick(true);
   }
+  // Program groups (a week, a weekday, the whole program) open in schedule order. Ridden / Aired override it
+  // for that list; tapping the same header again goes back to schedule order.
+  let listSort = null;
   // What's selected (selCell): one tile ("45|PZE", "w3|Mon") or a group: a row ("L:45", "W:3"),
   // a column ("T:PZE", "D:Mon") or everything ("ALL").
   function inGroup(a, b) {   // is tile (len|week, type|slot) inside the selected row/column/all?
@@ -1102,34 +1111,39 @@
   const LIST_STEP = 25;
   function moreList() { listLimit += LIST_STEP; repick(true); }
   function pickGroup(key, keepScroll, again) {
-    if (!again) listLimit = LIST_STEP;
-    selCell = key; renderProgress();
     const prog = isProgramGrid(), v = key.slice(2), ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
+    if (!again) { listLimit = LIST_STEP; listSort = prog ? { by: 'schedule', asc: false } : null; }
+    selCell = key; renderProgress();
     const all = progress.classes.filter(c => key === 'ALL' ? (!prog || c.week) :
       key[0] === 'L' ? c.len === Number(v) : key[0] === 'T' ? c.type === v : key[0] === 'W' ? c.week === Number(v) : c.slot === v);
     const DAYS = { Mon: 'Mondays', Tue: 'Tuesdays', Wed: 'Wednesdays', Thu: 'Thursdays', Fri: 'Fridays', Sat: 'Saturdays', Sun: 'Sundays' };
     const plural = d => DAYS[d] || d;
     const title = key === 'ALL' ? (prog ? 'Whole program' : 'All classes') :
       key[0] === 'L' ? v + 'm' : key[0] === 'T' ? esc(TYPE_SHORT[v] || v) : key[0] === 'W' ? 'Week ' + v : esc(plural(v));
-    showList(title, all, prog ? c => weekLabel(ch, c.week, c.slot) : null, keepScroll);
+    const again2 = key === 'ALL' ? 'Tap the Week corner again' : 'Tap ' + title + ' again';
+    showList(title, all, prog ? c => weekLabel(ch, c.week, c.slot) : null, keepScroll,
+             prog ? (listSort.by === 'schedule' ? 'In schedule order' : again2 + ' for schedule order') : '');
   }
   const isProgramGrid = () => !!(progress.challenge && progress.challenge.kind === 'Program' && progress.classes.some(c => c.week));
   function pickCell(len, type, keepScroll, again) {
     if (!again) listLimit = LIST_STEP;
+    listSort = null;
     selCell = len + '|' + type; renderProgress();
     showList(len + 'm ' + esc(TYPE_SHORT[type] || type), progress.classes.filter(c => c.len === len && c.type === type), null, keepScroll);
   }
   /** The class list on the right (or below): counts header, sort, Show done, then the classes, 25 at a time.
    *  where(c), for program groups, says which week and day each class is on. */
-  function showList(title, all, where, keepScroll) {
+  function showList(title, all, where, keepScroll, orderNote) {
     const doneCount = all.filter(c => c.done).length;
     // With done rides shown, two sorts (tap the active one again to reverse it):
     //   Ridden: done rides first by when you last rode them (gray manual checks, with no ride date, at the far end),
     //     then the rest by air date.   Aired: everything together by air date.
     // Without done rides, only Aired applies (Ridden is grayed out); it can still be reversed.
-    const dir = sortAsc ? -1 : 1;
+    const by = listSort ? listSort.by : sortBy, dir = (listSort ? listSort.asc : sortAsc) ? -1 : 1;
+    const slotRank = d => (DAY_ORDER.indexOf(d) + 1) || 99;
     const cs = all.filter(c => showDone || !c.done).sort((a, b) => {
-      if (showDone && sortBy === 'ridden') {
+      if (by === 'schedule') return (a.week - b.week) || (slotRank(a.slot) - slotRank(b.slot)) || String(a.slot).localeCompare(String(b.slot));
+      if (showDone && by === 'ridden') {
         return (b.done - a.done) || dir * ((b.rodeAt || 0) - (a.rodeAt || 0)) || dir * (b.air - a.air);
       }
       return dir * (b.air - a.air);
@@ -1143,7 +1157,8 @@
             '<span class="lcounts">' + counts + '</span></div>' + sortSwitch() + '</div>' +
             (doneCount ? '<div class="toggle lshow"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
               ' onchange="showDone=this.checked; savePrefs(); repick(true)">' +
-              '<label for="lShowDone">Show done</label></div>' : '');
+              '<label for="lShowDone">Show done</label></div>' : '') +
+            (orderNote ? '<div class="muted" style="font-size:13px;margin:-4px 0 8px">' + esc(orderNote) + '</div>' : '');
     if (!cs.length) h += '<p class="muted">All done here! 🎉</p>';
     h += '<div class="list">';
     const day = t => new Date(t * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
