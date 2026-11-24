@@ -16,6 +16,11 @@
     header h1 { font-size:18px; margin:0; }
     header .who { font-size:13px; color:var(--muted); text-align:right; }
     header button { font-size:12px; margin-top:2px; }
+    .hdrR { display:flex; align-items:center; gap:10px; }
+    header .gear { width:38px; height:38px; margin:0; padding:0; border-radius:50%; border:1px solid var(--line); background:#fff;
+      color:#334155; display:flex; align-items:center; justify-content:center; }
+    header .gear.on { background:#111; color:#fff; border-color:#111; }
+    header .gear.hidden { display:none; }
     main { max-width:720px; margin:0 auto; padding:16px; }
     .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
     .muted { color:var(--muted); font-size:14px; }
@@ -154,7 +159,11 @@
 <body>
 <header>
   <h1>RedditPZ Challenges</h1>
-  <div class="who hidden" id="who"><span id="whoName"></span><br><button onclick="signOut()">Sign out</button></div>
+  <div class="hdrR">
+    <div class="who hidden" id="who"><span id="whoName"></span><br><button onclick="signOut()">Sign out</button></div>
+    <button type="button" class="gear hidden" id="gearBtn" onclick="showTab('Sync')" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  </div>
 </header>
 
 <main>
@@ -480,7 +489,7 @@
       if (boot.buddies) putCache('buddies', boot.challengeId, boot.buddies);
     }
     $('vSignin').classList.add('hidden');
-    $('who').classList.remove('hidden');
+    $('who').classList.remove('hidden'); $('gearBtn').classList.remove('hidden');
     $('whoName').textContent = me.rider ? me.rider.pelotonUsername : (me.name || me.email || '');
     if (me.rider) enterApp(); else $('vJoin').classList.remove('hidden');
   }
@@ -656,6 +665,7 @@
       $('p' + n).classList.toggle('hidden', n !== name);
       $('t' + n).classList.toggle('on', n === name);
     });
+    $('gearBtn').classList.toggle('on', name === 'Sync');
     if (name === 'Progress') loadProgress();
     if (name === 'Buddies') { fillSettings(); loadBuddies(); }
   }
