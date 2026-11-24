@@ -21,6 +21,18 @@
       color:#334155; display:flex; align-items:center; justify-content:center; }
     header .gear.on { background:#111; color:#fff; border-color:#111; }
     header .gear.hidden { display:none; }
+    /* Signed in or not, always said in the header. */
+    header .who #whoState { display:inline-block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+    header .who.in #whoState { color:#111; font-weight:600; max-width:110px; }
+    header .who.in #whoState::before { content:''; display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a; margin-right:5px; vertical-align:1px; }
+    @media (max-width:420px) {
+      header { padding:10px 12px; }
+      header h1 { font-size:16px; }
+      .hdrR { gap:7px; }
+      header .gear { width:34px; height:34px; }
+      header .who.in #whoState { max-width:78px; }
+      header .who button { font-size:11px; padding:2px 8px; }
+    }
     main { max-width:720px; margin:0 auto; padding:16px; }
     .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
     .muted { color:var(--muted); font-size:14px; }
@@ -160,7 +172,7 @@
 <header>
   <h1>RedditPZ Challenges</h1>
   <div class="hdrR">
-    <div class="who hidden" id="who"><span id="whoName"></span><br><button onclick="signOut()">Sign out</button></div>
+    <div class="who" id="who"><span id="whoState">Not signed in</span><br><button class="hidden" id="signOutBtn" onclick="signOut()">Sign out</button></div>
     <button type="button" class="gear hidden" id="gearBtn" onclick="showTab('Sync')" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
@@ -489,8 +501,10 @@
       if (boot.buddies) putCache('buddies', boot.challengeId, boot.buddies);
     }
     $('vSignin').classList.add('hidden');
-    $('who').classList.remove('hidden'); $('gearBtn').classList.remove('hidden');
-    $('whoName').textContent = me.rider ? me.rider.pelotonUsername : (me.name || me.email || '');
+    $('who').classList.add('in'); $('signOutBtn').classList.remove('hidden');
+    $('whoState').textContent = me.rider ? me.rider.pelotonUsername : (me.name || 'Signed in');
+    $('who').title = 'Signed in as ' + $('whoState').textContent;
+    if (me.rider) $('gearBtn').classList.remove('hidden');
     if (me.rider) enterApp(); else $('vJoin').classList.remove('hidden');
   }
   function signOut() {
@@ -536,7 +550,8 @@
     try {
       me = await api('join', { pelotonUsername: $('jPeloton').value, discordName: cleanDiscord($('jDiscord').value) });
       $('vJoin').classList.add('hidden');
-      $('whoName').textContent = me.rider.pelotonUsername;
+      $('whoState').textContent = me.rider.pelotonUsername; $('who').title = 'Signed in as ' + me.rider.pelotonUsername;
+      $('gearBtn').classList.remove('hidden');
       enterApp();
     } catch (e) { showError(e); } finally { $('jBtn').disabled = false; }
   }
