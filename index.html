@@ -123,6 +123,19 @@
     .setRow { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
     .dotOn { display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a; margin-right:6px; vertical-align:1px; }
     .linkish { background:none; border:none; padding:0; font-size:15px; text-align:left; cursor:pointer; }
+    /* Saturday ride card */
+    #pRide .rTop { display:flex; align-items:center; gap:8px; cursor:pointer; }
+    #pRide .rTop b { white-space:nowrap; }
+    #pRide .rSum { color:var(--muted); font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+    #pRide .rTop .chev { color:var(--muted); font-size:20px; line-height:1; transition:transform .15s; }
+    #pRide.open .rTop .chev { transform:rotate(90deg); }
+    #pRide .rBody { display:none; margin-top:8px; }
+    #pRide.open .rBody { display:block; }
+    #pRide .rClass { font-weight:600; }
+    #pRide .rClock { font-size:22px; font-weight:700; margin:10px 0 8px; font-variant-numeric:tabular-nums; }
+    #pRide .rClock.go { color:#16a34a; font-size:26px; }
+    #pRide .seg { margin:2px 0 8px; }
+    #pRide .rWho { font-size:14px; }
     .listbar { display:flex; align-items:center; gap:10px; margin:0 0 10px; }
     /* Sort buttons always stay on the top line; if space runs out, the counts slip under the title instead. */
     .listhead { display:flex; align-items:center; gap:8px; margin:0 0 10px; }
@@ -288,6 +301,7 @@
 
     <div id="pProgress">
       <div id="pLeft">
+      <div class="card hidden" id="pRide"></div>
       <div class="card hidden" id="pSyncPrompt"></div>
       <div class="card hidden" id="pSynced"></div>
       <div class="card" id="pSummary"><span class="muted">Loading...</span></div>
@@ -440,6 +454,7 @@
   const ICON = {
     buddy: svgIcon('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/>'),
     stack: svgIcon('<path d="M6 17V6a2 2 0 0 1 2-2h11"/><rect x="9" y="7" width="12" height="13" rx="2"/><path d="M13.5 10.8v6.4l4.6-3.2z"/>'),
+    link: svgIcon('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>'),
     timer: svgIcon('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M10 2h4M19 6l1.5-1.5"/>'),
     power: svgIcon('<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'),
     graph: svgIcon('<rect x="8" y="3" width="8" height="4" rx="1"/><path d="M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M7 17l3-4 3 2 4-5"/>')
@@ -625,6 +640,7 @@
     finishStravaConnect();
     $('sLast').textContent = me.rider.lastSync ? 'Last synced: ' + new Date(me.rider.lastSync).toLocaleString() : 'Not synced yet.';
     checkSyncPrompt();
+    loadRide();
     showTab(me.rider.lastSync ? 'Progress' : 'Sync');
     prefetch();
   }
@@ -1180,6 +1196,83 @@
     h += '<p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
     $('pList').innerHTML = h; $('pList').classList.remove('hidden');
     if (!keepScroll) showListPanel();
+  }
+
+  // ----- Saturday ride -----
+  // The current program's Saturday class at 9:59 AM Central, for everyone. The countdown uses the server's
+  // clock (phones drift); In / Maybe / Out is stored per ride. A slim line early in the week, open in the last day.
+  let RIDE = null, rideSkew = 0, rideTimer = 0, rideOpen = null, rideWhoOpen = false;
+  async function loadRide() {
+    if (BACKEND !== 'cf') return;
+    try {
+      const t0 = Date.now(), r = await api('groupRide', { key: 'sat' }), t1 = Date.now();
+      rideSkew = r.now - (t0 + t1) / 2;
+      RIDE = r; renderRide();
+      if (new URLSearchParams(location.search).get('ride')) { rideOpen = true; renderRide(); $('pRide').scrollIntoView({ block: 'start' }); }
+    } catch (e) { /* the card is extra: stay quiet */ }
+  }
+  const rideNow = () => (Date.now() + rideSkew) / 1000;
+  function rideClock() {
+    const left = RIDE.ride.startsAt - rideNow(), len = ((RIDE.class && RIDE.class.len) || 60) * 60;
+    const mmss = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+    if (left > 86400) { const d = Math.floor(left / 86400), h = Math.floor(left % 86400 / 3600); return { text: 'Starts in ' + d + 'd ' + h + 'h', tick: 60 }; }
+    if (left > 3600) { const h = Math.floor(left / 3600), m = Math.floor(left % 3600 / 60); return { text: 'Starts in ' + h + 'h ' + m + 'm', tick: 30 }; }
+    if (left > 0) return { text: 'Starts in ' + mmss(Math.ceil(left)), tick: 1, soon: true };
+    if (left > -90) return { text: '▶ Press play now!', tick: 1, go: true };
+    if (-left < len) return { text: 'Started ' + mmss(-left) + ' ago', tick: 1 };
+    return { text: 'Ride over. See you next Saturday!', tick: 0 };
+  }
+  function renderRide() {
+    const box = $('pRide'), r = RIDE;
+    clearTimeout(rideTimer);
+    if (!r || !r.class) { box.classList.add('hidden'); return; }
+    const left = r.ride.startsAt - rideNow();
+    const open = rideOpen === null ? left < 86400 : rideOpen;   // open on its own in the last day
+    const day = new Date(r.ride.startsAt * 1000).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    const time = new Date(r.ride.startsAt * 1000).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    const ins = r.rsvps.filter(x => x.status === 'in'), maybes = r.rsvps.filter(x => x.status === 'maybe');
+    const clock = rideClock(), c = r.class;
+    const st = (k, label) => '<button type="button" class="' + (r.mine === k ? 'on' : '') + '" onclick="rideRsvp(\'' + k + '\')">' + label + '</button>';
+    box.innerHTML =
+      '<div class="rTop" onclick="rideOpen=!' + open + '; renderRide()"><b>🚴 ' + esc(r.ride.label) + '</b>' +
+        '<span class="rSum">' + esc(time) + ' · ' + ins.length + ' in</span><span class="chev">›</span></div>' +
+      '<div class="rBody">' +
+        '<div class="rClass">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
+        '<div class="muted">' + esc(c.instructor) + ' · ' + esc(r.program.name) + ', Week ' + r.program.week + '</div>' +
+        '<div class="muted">' + esc(day + ' · ' + time) + '</div>' +
+        '<div class="rClock' + (clock.go ? ' go' : '') + '" id="rideClock">' + clock.text + '</div>' +
+        '<div class="seg">' + st('in', 'In') + st('maybe', 'Maybe') + st('out', 'Out') + '</div>' +
+        '<div class="rWho">' + (ins.length || maybes.length
+          ? '<span style="cursor:pointer" onclick="rideWhoOpen=!rideWhoOpen; renderRide()"><b>' + ins.length + ' in</b>' +
+            (maybes.length ? ' · ' + maybes.length + ' maybe' : '') + ' <span class="muted">' + (rideWhoOpen ? '▾' : '▸') + '</span></span>' +
+            (rideWhoOpen ? '<div class="muted" style="margin-top:4px">' + ins.map(x => esc(x.name)).join(', ') +
+              (maybes.length ? (ins.length ? '<br>' : '') + 'Maybe: ' + maybes.map(x => esc(x.name)).join(', ') : '') + '</div>' : '')
+          : '<span class="muted">Be the first in.</span>') + '</div>' +
+        classButtons({ id: c.id, title: c.title, done: false },
+          '<button type="button" onclick="copyRideLink(this)">' + ICON.link + 'Link</button>') +
+      '</div>';
+    box.classList.toggle('open', open);
+    box.classList.remove('hidden');
+    if (open && clock.tick) rideTimer = setTimeout(rideTick, clock.tick * 1000);
+  }
+  function rideTick() {   // updates just the clock line, once a second in the last hour
+    const k = rideClock(), el = $('rideClock');
+    if (!el) return;
+    if (!k.tick) return renderRide();
+    el.textContent = k.text; el.classList.toggle('go', !!k.go);
+    rideTimer = setTimeout(rideTick, k.tick * 1000);
+  }
+  async function rideRsvp(k) {
+    if (!RIDE) return;
+    const was = RIDE.mine, next = was === k ? '' : k;   // tap your answer again to take it back
+    RIDE.mine = next; renderRide();
+    try { const r = await api('groupRsvp', { key: 'sat', eventId: RIDE.ride.id, status: next }); RIDE = Object.assign(r, { now: RIDE.now }); renderRide(); }
+    catch (e) { RIDE.mine = was; renderRide(); showError(e); }
+  }
+  function copyRideLink(btn) {
+    const url = APP_URL + '?ride=sat';
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('Link copied. Paste it in #ride-buddies.'))
+      .catch(() => prompt('Copy this link:', url));
   }
 
   // ----- Sync -----
