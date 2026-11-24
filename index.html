@@ -62,6 +62,14 @@
     .list .zs { height:6px; margin:4px 0 2px; }
     .grid.cal .brainc { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
     .listbar { display:flex; align-items:center; gap:10px; margin:0 0 10px; }
+    .sheet.pwr { position:relative; }
+    .pwrX { position:absolute; top:8px; right:8px; width:30px; height:30px; padding:0; border-radius:50%; border:0;
+            background:#f2f2f7; color:#636366; font-size:15px; line-height:30px; }
+    .pwrTop { min-height:32px; display:flex; align-items:center; padding-right:40px; margin-bottom:8px; font-size:15px; }
+    .pwrTop select { font-size:16px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:#fff; max-width:100%; }
+    .pwrMsg { margin:0 0 6px; }
+    .pwrBtns { margin-top:12px; }
+    .pwrBtns button { flex:1; }
     .seg { display:flex; background:#eeeef0; border-radius:9px; padding:2px; margin-left:auto; }
     .seg button { border:0; background:transparent; padding:5px 10px; border-radius:7px; font-size:14px; color:#3a3a3c; margin:0; white-space:nowrap; }
     .seg button:disabled { color:#c7c7cc; cursor:default; }
@@ -1390,26 +1398,25 @@
     const box = document.createElement('div');
     box.id = 'powerBox';
     let ftp = 0; try { ftp = Number(localStorage.getItem('rpzFtp')) || 0; } catch (e) {}
-    box.innerHTML = '<div class="sheet" onclick="event.stopPropagation()">' +
-      '<h3 style="margin:0 0 2px">Ride graph</h3><div class="muted" style="margin-bottom:8px">' + esc(c.title) + '</div>' +
-      (times.length > 1
-        ? '<div class="row" style="margin-bottom:6px;align-items:center"><label for="powerRide" style="margin:0">Your ride</label>' +
-          '<select id="powerRide" onchange="loadPowerRide()" style="font-size:16px;padding:6px;border:1px solid var(--line);border-radius:8px">' +
-          times.map(t => '<option value="' + t + '">' + esc(new Date(t * 1000).toLocaleString(undefined,
-            { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</option>').join('') +
-          '</select></div><div class="muted" style="font-size:13px;margin-bottom:6px">This class has a twin with the same title and air time, ' +
-          'which Peloton\'s export can\'t tell apart. Pick the ride you want.</div>'
-        : '') +
-      '<div id="powerMsg" class="muted">Getting your ride from Strava...</div>' +
+    // The graph names the class, so the popup doesn't: just which ride (a picker when there are several),
+    // the graph, the power switch with FTP, and Copy / Share. A status line shows only while loading or on trouble.
+    const when = t => 'Ridden ' + new Date(t * 1000).toLocaleString(undefined,
+      { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(/, (\d+:\d\d)/, ' · $1');
+    box.innerHTML = '<div class="sheet pwr" onclick="event.stopPropagation()">' +
+      '<button type="button" class="pwrX" onclick="closePower()" aria-label="Close">✕</button>' +
+      '<div class="pwrTop">' + (times.length > 1
+        ? '<select id="powerRide" onchange="loadPowerRide()" title="This class has a twin Peloton\'s export can\'t tell apart: pick your ride">' +
+          times.map(t => '<option value="' + t + '">' + esc(when(t)) + '</option>').join('') + '</select>'
+        : '<span>' + esc(when(times[0])) + '</span>') + '</div>' +
+      '<div id="powerMsg" class="muted pwrMsg">Getting your ride from Strava...</div>' +
       '<canvas id="powerCanvas" class="hidden"></canvas>' +
       '<div class="row" style="margin-top:10px;align-items:center">' +
       '<label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="powerMine" checked onchange="showMine=this.checked; drawPower()">My power</label>' +
       '<label for="powerFtp" style="margin:0 0 0 8px">FTP</label>' +
       '<input id="powerFtp" type="number" inputmode="numeric" min="50" max="600" value="' + (ftp || st.ftp || '') + '"' +
       ' style="width:80px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px" oninput="drawPower()"></div>' +
-      '<div class="row" style="margin-top:12px"><button class="primary" id="powerCopy" disabled onclick="sharePower(false)">Copy</button>' +
-      (CAN_SHARE ? '<button id="powerShare" disabled onclick="sharePower(true)">Share</button>' : '') +
-      '<button onclick="closePower()">Close</button></div></div>';
+      '<div class="row pwrBtns"><button class="primary" id="powerCopy" disabled onclick="sharePower(false)">Copy</button>' +
+      (CAN_SHARE ? '<button id="powerShare" disabled onclick="sharePower(true)">Share</button>' : '') + '</div></div>';
     box.onclick = closePower;
     document.body.appendChild(box);
     api('image', { id: c.id }).then(png => {
@@ -1417,15 +1424,19 @@
       powerImg = new Image();
       powerImg.onload = drawPower;
       powerImg.src = 'data:image/png;base64,' + png.png;
-    }).catch(e => { if ($('powerMsg')) $('powerMsg').textContent = e.message || String(e); });
+    }).catch(e => powerStatus(e.message || String(e)));
     loadPowerRide();
   }
   let powerTimes = [];
+  function powerStatus(text) {   // the popup's one status line: shown only while loading or on trouble
+    const m = $('powerMsg'); if (!m) return;
+    m.textContent = text; m.classList.toggle('hidden', !text);
+  }
   async function loadPowerRide() {
     const c = powerClass; if (!c) return;
     const rodeAt = $('powerRide') ? Number($('powerRide').value) : powerTimes[0];
     powerData = null; powerFailed = '';
-    $('powerMsg').textContent = 'Getting your ride from Strava...';
+    powerStatus('Getting your ride from Strava...');
     $('powerMine').disabled = false;
     const key = rodeAt + '|' + c.len;
     try {
@@ -1452,14 +1463,13 @@
     cv.width = W; cv.height = H;
     const g = cv.getContext('2d');
     g.drawImage(powerImg, 0, 0);
-    const msg = $('powerMsg');
     const ready = on => { $('powerCopy').disabled = !on; if ($('powerShare')) $('powerShare').disabled = !on; };
     cv.classList.remove('hidden');
     if (!showMine || powerFailed) {   // Sourdough's graph on its own
-      msg.textContent = powerFailed || 'Ride graph without your power.'; ready(true); return;
+      powerStatus(powerFailed); ready(true); return;
     }
-    if (!powerData) { msg.textContent = 'Getting your ride from Strava...'; ready(true); return; }
-    if (!(ftp >= 50)) { msg.textContent = 'Enter your FTP to draw your power.'; ready(false); return; }
+    if (!powerData) { powerStatus('Getting your ride from Strava...'); ready(true); return; }
+    if (!(ftp >= 50)) { powerStatus('Enter your FTP to draw your power.'); ready(false); return; }
     const secs = powerClass.len * 60;
     const w = smooth(powerData.watts.slice(0, secs), 15);
     const sx = W / GRAPH.w, sy = H / GRAPH.h;
@@ -1494,7 +1504,7 @@
     if (powerData.hr) parts.push('HR: ' + powerData.hr);
     g.textAlign = 'left'; g.textBaseline = 'middle'; g.font = font(700, 17); g.fillStyle = '#1e293b';
     g.fillText(parts.join('    '), x0, GRAPH.labelY * sy);
-    msg.textContent = powerData.name + ' · ' + new Date(powerData.start).toLocaleString();
+    powerStatus('');
     ready(true);
   }
   const PINK = '#d4008f';
