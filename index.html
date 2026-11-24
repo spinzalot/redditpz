@@ -81,6 +81,12 @@
     .grid td.cell.other { background:#f4faf4; color:#43a047; }   /* ridden, but outside the count window */
     .grid td.cell { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
     .grid td.cell.sel { outline:2px solid var(--ink); outline-offset:-2px; }
+    /* Row / column / corner headers pick a group of tiles; the group gets a softer outline. */
+    .grid th.pick { cursor:pointer; }
+    .grid th.pick:hover { background:#e6e6eb; }
+    .grid th.pick.sel { background:var(--ink); color:#fff; }
+    .grid td.cell.insel { outline:2px solid #8e8e93; outline-offset:-2px; }
+    .moreBtn { display:block; width:100%; margin:8px 0 4px; }
     .grid td.empty { color:#bbb; }
     /* Program grid as a calendar: separate rounded day tiles, date in the corner, today ringed. */
     table.grid.cal { border-collapse:separate; border-spacing:4px; margin-top:8px; }
@@ -925,10 +931,7 @@
     showZones = on; savePrefs();
     if (progress) renderProgress();
     if (buddies) renderBuddies();
-    const open = $('pList'); if (open && !open.classList.contains('hidden') && selCell) {
-      const m = /^w(\d+)\|(.+)$/.exec(selCell);
-      if (m) pickSlot(Number(m[1]), m[2], true); else { const [len, t] = selCell.split('|'); if (t) pickCell(Number(len), t, true); }
-    }
+    repick(true);
   }
 
   // Rides outside a challenge's count window are shown (↺) but not counted.
@@ -951,7 +954,7 @@
       .sort((a, b) => (DAY_ORDER.indexOf(a) + 1 || 99) - (DAY_ORDER.indexOf(b) + 1 || 99) || String(a).localeCompare(String(b)));
     let h = titleRow(p, pct) +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
-            '<div class="muted">' + (p.total - p.done) + ' to go. Tap to see class.' + (p.other ? ' ↺ = done outside window.' : '') + '</div>';
+            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a day, week or weekday to see classes.' + (p.other ? ' ↺ = done outside window.' : '') + '</div>';
     const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
     const todayKey = new Date().toDateString();
     let lastMonth = -1;
@@ -963,9 +966,10 @@
       const label = newMonth ? dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : String(dt.getDate());
       return { html: '<span class="dom' + (newMonth ? ' mon' : '') + '">' + esc(label) + '</span>', today: dt.toDateString() === todayKey };
     };
-    h += '<table class="grid cal"><tr><th>Week</th>' + slots.map(d => '<th>' + esc(d) + '</th>').join('') + '</tr>';
+    const hd = (key, label, tip) => '<th class="pick' + (selCell === key ? ' sel' : '') + '" title="' + tip + '" onclick="pickGroup(\'' + key + '\')">' + label + '</th>';
+    h += '<table class="grid cal"><tr>' + hd('ALL', 'Week', 'The whole program') + slots.map(d => hd('D:' + d, esc(d), 'Every ' + esc(d))).join('') + '</tr>';
     weeks.forEach(w => {
-      h += '<tr><th>' + w + '</th>';
+      h += '<tr>' + hd('W:' + w, w, 'Week ' + w);
       slots.forEach(d => {
         const cs = p.classes.filter(c => c.week === w && c.slot === d);
         const cn = corner(w, d);
@@ -973,7 +977,7 @@
         const done = cs.every(c => c.done), manual = done && cs.some(c => c.manual);
         const other = !done && cs.every(c => c.done || c.otherAt > 0);   // every open class was ridden at another time
         const key = 'w' + w + '|' + d;
-        h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : (other ? ' other' : '')) + (selCell === key ? ' sel' : '') + (cn.today ? ' today' : '') +
+        h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : (other ? ' other' : '')) + (selCell === key ? ' sel' : inGroup(w, d) ? ' insel' : '') + (cn.today ? ' today' : '') +
              '" data-week="' + w + '" data-slot="' + esc(d) + '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
              cn.html + (done ? '✓' : other ? '↺' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') +
              noteIcon(cs) +
@@ -1046,16 +1050,17 @@
     p.types = p.types.slice().sort((a, b) => typeRank(a) - typeRank(b));
     let h = titleRow(p, pct) +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
-            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a cell to see its classes.</div>';
-    h += '<table class="grid"><tr><th>min</th>' + p.types.map(t => '<th>' + esc(TYPE_SHORT[t] || t) + '</th>').join('') + '</tr>';
+            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a cell, row or column to see its classes.</div>';
+    const hd = (key, label, tip) => '<th class="pick' + (selCell === key ? ' sel' : '') + '" title="' + tip + '" onclick="pickGroup(\'' + key + '\')">' + label + '</th>';
+    h += '<table class="grid"><tr>' + hd('ALL', 'min', 'All classes') + p.types.map(t => hd('T:' + t, esc(TYPE_SHORT[t] || t), 'All ' + esc(t) + ' classes')).join('') + '</tr>';
     p.lengths.forEach(len => {
-      h += '<tr><th>' + len + '</th>';
+      h += '<tr>' + hd('L:' + len, len, 'All ' + len + ' min classes');
       p.types.forEach(t => {
         const cs = p.classes.filter(c => c.len === len && c.type === t);
         if (!cs.length) { h += '<td class="empty">–</td>'; return; }
         const d = cs.filter(c => c.done).length;
         const key = len + '|' + t;
-        h += '<td class="cell' + (d === cs.length ? ' complete' : '') + (selCell === key ? ' sel' : '') +
+        h += '<td class="cell' + (d === cs.length ? ' complete' : '') + (selCell === key ? ' sel' : inGroup(len, t) ? ' insel' : '') +
              '" onclick="pickCell(' + len + ',\'' + t + '\')">' + d + '/' + cs.length + '</td>';
       });
       h += '</tr>';
@@ -1066,28 +1071,61 @@
 
   // "Ridden | Aired" switch; tapping the active option reverses it (↓ newest first, ↑ oldest first).
   // With done rides hidden, Ridden is grayed out and Aired is the sort in use.
-  function sortSwitch(len, type) {
+  function sortSwitch() {
     const active = showDone ? sortBy : 'air';
     const btn = (key, label) => {
       const off = key === 'ridden' && !showDone;
       return '<button type="button" class="' + (active === key ? 'on' : '') + '"' + (off ? ' disabled title="Tick Show done to sort by when you rode"' : '') +
-        ' onclick="setSort(\'' + key + '\',' + len + ',\'' + type + '\')">' + label + (active === key ? (sortAsc ? ' ↑' : ' ↓') : '') + '</button>';
+        ' onclick="setSort(\'' + key + '\')">' + label + (active === key ? (sortAsc ? ' ↑' : ' ↓') : '') + '</button>';
     };
     return '<div class="seg">' + btn('ridden', 'Ridden') + btn('air', 'Aired') + '</div>';
   }
-  function setSort(key, len, type) {
+  function setSort(key) {
     const active = showDone ? sortBy : 'air';
     if (active === key) sortAsc = !sortAsc; else { sortBy = key; sortAsc = false; }
-    savePrefs(); pickCell(len, type, true);
+    savePrefs(); repick(true);
   }
-  function pickCell(len, type, keepScroll) {
+  // What's selected (selCell): one tile ("45|PZE", "w3|Mon") or a group: a row ("L:45", "W:3"),
+  // a column ("T:PZE", "D:Mon") or everything ("ALL").
+  function inGroup(a, b) {   // is tile (len|week, type|slot) inside the selected row/column/all?
+    const k = selCell || '';
+    return k === 'ALL' || k === 'L:' + a || k === 'W:' + a || k === 'T:' + b || k === 'D:' + b;
+  }
+  function repick(keepScroll) {
+    const k = selCell; if (!k || $('pList').classList.contains('hidden')) return;
+    const m = /^w(\d+)\|(.+)$/.exec(k);
+    if (m) return pickSlot(Number(m[1]), m[2], keepScroll);
+    if (k === 'ALL' || /^[LTWD]:/.test(k)) return pickGroup(k, keepScroll, true);
+    const [len, t] = k.split('|'); if (t) pickCell(Number(len), t, keepScroll, true);
+  }
+  let listLimit = 25;
+  const LIST_STEP = 25;
+  function moreList() { listLimit += LIST_STEP; repick(true); }
+  function pickGroup(key, keepScroll, again) {
+    if (!again) listLimit = LIST_STEP;
+    selCell = key; renderProgress();
+    const prog = isProgramGrid(), v = key.slice(2), ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
+    const all = progress.classes.filter(c => key === 'ALL' ? (!prog || c.week) :
+      key[0] === 'L' ? c.len === Number(v) : key[0] === 'T' ? c.type === v : key[0] === 'W' ? c.week === Number(v) : c.slot === v);
+    const DAYS = { Mon: 'Mondays', Tue: 'Tuesdays', Wed: 'Wednesdays', Thu: 'Thursdays', Fri: 'Fridays', Sat: 'Saturdays', Sun: 'Sundays' };
+    const plural = d => DAYS[d] || d;
+    const title = key === 'ALL' ? (prog ? 'Whole program' : 'All classes') :
+      key[0] === 'L' ? v + 'm' : key[0] === 'T' ? esc(TYPE_SHORT[v] || v) : key[0] === 'W' ? 'Week ' + v : esc(plural(v));
+    showList(title, all, prog ? c => weekLabel(ch, c.week, c.slot) : null, keepScroll);
+  }
+  const isProgramGrid = () => !!(progress.challenge && progress.challenge.kind === 'Program' && progress.classes.some(c => c.week));
+  function pickCell(len, type, keepScroll, again) {
+    if (!again) listLimit = LIST_STEP;
     selCell = len + '|' + type; renderProgress();
-    const all = progress.classes.filter(c => c.len === len && c.type === type);
+    showList(len + 'm ' + esc(TYPE_SHORT[type] || type), progress.classes.filter(c => c.len === len && c.type === type), null, keepScroll);
+  }
+  /** The class list on the right (or below): counts header, sort, Show done, then the classes, 25 at a time.
+   *  where(c), for program groups, says which week and day each class is on. */
+  function showList(title, all, where, keepScroll) {
     const doneCount = all.filter(c => c.done).length;
     // With done rides shown, two sorts (tap the active one again to reverse it):
-    //   Recently ridden: done rides first by when you last rode them (gray manual checks, with no ride
-    //     date, at the far end), then the rest by air date.
-    //   Release date: everything together by air date.
+    //   Ridden: done rides first by when you last rode them (gray manual checks, with no ride date, at the far end),
+    //     then the rest by air date.   Aired: everything together by air date.
     // Without done rides, only Aired applies (Ridden is grayed out); it can still be reversed.
     const dir = sortAsc ? -1 : 1;
     const cs = all.filter(c => showDone || !c.done).sort((a, b) => {
@@ -1101,25 +1139,30 @@
     const counts = left === 0 ? '<span class="lcDone">All ' + doneCount + ' ✓</span> 🎉'
       : (doneCount ? '<span class="lcDone">' + doneCount + ' ✓</span><span class="muted">·</span>' : '') +
         '<span>' + (left === 1 ? 'Just 1 left!' : left + ' left!') + '</span>';
-    let h = '<div class="listhead"><div class="ltitle"><h3>' + len + 'm ' + esc(TYPE_SHORT[type] || type) + '</h3>' +
-            '<span class="lcounts">' + counts + '</span></div>' + sortSwitch(len, type) + '</div>' +
+    let h = '<div class="listhead"><div class="ltitle"><h3>' + title + '</h3>' +
+            '<span class="lcounts">' + counts + '</span></div>' + sortSwitch() + '</div>' +
             (doneCount ? '<div class="toggle lshow"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
-              ' onchange="showDone=this.checked; savePrefs(); pickCell(' + len + ',\'' + type + '\', true)">' +
+              ' onchange="showDone=this.checked; savePrefs(); repick(true)">' +
               '<label for="lShowDone">Show done</label></div>' : '');
-    if (!cs.length) h += '<p class="muted">All done in this cell! 🎉</p>';
+    if (!cs.length) h += '<p class="muted">All done here! 🎉</p>';
     h += '<div class="list">';
-    cs.forEach(c => {
-      const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
-           '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') +
-             (c.done && c.rodeAt ? ' · Ridden ' + new Date(c.rodeAt * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '') + '</div>' +
+    const day = t => new Date(t * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    cs.slice(0, listLimit).forEach(c => {
+      const aired = day(c.air);
+      h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') :
+                                                         (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
+           '<div class="muted">' + (where ? where(c) + ' · ' + (c.instructor ? esc(c.instructor) + ' · ' : '') : '') +
+             (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') +
+             (c.done && c.rodeAt ? ' · Ridden ' + day(c.rodeAt) : (c.manual ? ' · marked done by you' : '')) + '</div>' +
            (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + notesBlock(c) +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
            classButtons(c) +
            '</div>';
     });
-    h += '</div><p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
+    h += '</div>';
+    if (cs.length > listLimit) h += '<button type="button" class="moreBtn" onclick="moreList()">Show more (' + (cs.length - listLimit) + ' more)</button>';
+    h += '<p class="muted">Ride profiles from <a href="https://sourdoughrides.com" target="_blank" rel="noopener">sourdoughrides.com</a></p>';
     $('pList').innerHTML = h; $('pList').classList.remove('hidden');
     if (!keepScroll) showListPanel();
   }
