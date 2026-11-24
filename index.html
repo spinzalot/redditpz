@@ -18,6 +18,8 @@
     header button { font-size:12px; margin-top:2px; }
     .hdrR { display:flex; align-items:center; gap:10px; margin-left:auto; }
     header { flex-wrap:wrap; row-gap:8px; }
+    /* Scrolling to a card stops just below the sticky header (its height is kept in --hdrH). */
+    .card { scroll-margin-top:calc(var(--hdrH, 64px) + 8px); }
     header h1 { order:1; }
     header .hdrR { order:2; }
     #chalBox { order:3; flex:1 0 100%; min-width:0; }
@@ -164,7 +166,7 @@
     .list .done { color:var(--done); }
     .list img { display:block; width:100%; height:auto; aspect-ratio:1120 / 540; margin-top:6px; background:#fff; cursor:zoom-in; }
     /* Scrolling to a panel stops below the sticky title bar. */
-    #pList, #bList { scroll-margin-top:56px; }
+    #pList, #bList { scroll-margin-top:calc(var(--hdrH, 64px) + 8px); }
     #pListEmpty { display:none; }
     /* Tablets, computers and phones held sideways: calendar on the left, the tapped class and its graph on the right,
        each scrolling on its own. */
@@ -730,6 +732,10 @@
     }
   }
   function closeSettings() { showTab(lastTab); }
+  (function () {   // keep --hdrH equal to the header's height (it grows when the picker wraps below the title)
+    const h = document.querySelector('header'), set = () => document.documentElement.style.setProperty('--hdrH', h.offsetHeight + 'px');
+    set(); if (window.ResizeObserver) new ResizeObserver(set).observe(h); else addEventListener('resize', set);
+  })();
 
   // ↻: tap syncs; long-press (phones) or right-click (computers) opens the sync options.
   let syncHeld = false, syncTimer = 0;
