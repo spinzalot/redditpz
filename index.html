@@ -94,6 +94,19 @@
     .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
     .list .zs { height:6px; margin:4px 0 2px; }
     .grid.cal .notec { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
+    /* Settings */
+    .setHead { display:flex; align-items:center; justify-content:space-between; margin:4px 0 8px; }
+    .setHead h2 { margin:0; font-size:20px; }
+    .setX { width:36px; height:36px; padding:0; border-radius:50%; font-size:16px; }
+    .card.set h3 { margin:0 0 8px; font-size:16px; }
+    .card.set button:not(.sbtn) { font-size:13px; padding:5px 12px; }
+    .card.set .list .item { padding:6px 0; }
+    .card.set .toggle { margin:4px 0; }
+    .card.set .toggle label { margin:0; }
+    .setSub { font-size:13px; color:var(--muted); margin:0 0 2px; display:block; }
+    .setRow { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+    .dotOn { display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a; margin-right:6px; vertical-align:1px; }
+    .linkish { background:none; border:none; padding:0; font-size:15px; text-align:left; cursor:pointer; }
     .listbar { display:flex; align-items:center; gap:10px; margin:0 0 10px; }
     /* Sort buttons always stay on the top line; if space runs out, the counts slip under the title instead. */
     .listhead { display:flex; align-items:center; gap:8px; margin:0 0 10px; }
@@ -209,7 +222,7 @@
     <div class="who" id="who"><span id="whoState">Not signed in</span><br><button class="hidden" id="signOutBtn" onclick="signOut()">Sign out</button></div>
     <button type="button" class="gear hidden" id="syncIcon" onclick="syncTap()" title="Sync your Peloton rides" aria-label="Sync"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.3 4.9"/><path d="M4 12a8 8 0 0 1 14.3-4.9"/><path d="M18.6 3v4.2h-4.2"/><path d="M5.4 21v-4.2h4.2"/></svg><span class="dot hidden" id="syncDot"></span></button>
     <input type="file" id="syncPick" accept=".csv,text/csv" class="hidden" onchange="syncPicked(this)">
-    <button type="button" class="gear hidden" id="gearBtn" onclick="showTab('Sync')" title="Settings" aria-label="Settings">
+    <button type="button" class="gear hidden" id="gearBtn" onclick="currentTab === 'Settings' ? closeSettings() : showTab('Settings')" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
 </header>
@@ -247,42 +260,7 @@
 
     <div id="pBuddies" class="hidden">
       <div class="card">
-        <details id="bSettings"><summary><b>⚙️ My buddy settings</b> <span class="muted" id="bSumm"></span></summary>
-        <label>Who can see me in the buddy finder</label>
-        <div class="row" style="gap:16px;margin-top:4px">
-          <label class="radio"><input type="radio" name="bVis" value="Everyone" onchange="saveSettings()"> Everyone</label>
-          <label class="radio"><input type="radio" name="bVis" value="Friends" onchange="saveSettings()"> Friends</label>
-          <label class="radio"><input type="radio" name="bVis" value="Nobody" onchange="saveSettings()"> Just me</label>
-        </div>
-        <label for="bDiscord">My Discord user ID (or username)</label>
-        <div class="row" style="flex-wrap:nowrap;gap:8px">
-          <input id="bDiscord" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. 123456789012345678"
-                 style="flex:1;min-width:0;max-width:260px">
-          <button id="bSave" onclick="saveSettings()">Save</button>
-        </div>
-        <div class="muted" id="bSaved" style="font-size:13px;min-height:18px"></div>
-        <details class="muted" style="margin-top:6px"><summary>Why an ID, and how do I find mine?</summary>
-          <p style="margin:6px 0 0">Discord only turns a pasted mention into a real ping when it uses your numeric user ID.
-          With just a username, buddy posts name you but don't notify you.</p>
-          <p style="margin:8px 0 2px"><b>On a phone (Discord app):</b></p>
-          <ol style="margin:0">
-            <li>Tap your <b>profile picture</b> (bottom right), then the <b>gear</b> (top right) for User Settings.</li>
-            <li>Scroll to <b>Advanced</b> and turn on <b>Developer Mode</b>.</li>
-            <li>In any channel, tap <b>your name</b> on a message you posted.</li>
-            <li>Tap <b>⋯</b>, then <b>Copy User Info</b>, then <b>Copy User ID</b>.</li>
-          </ol>
-          <p style="margin:8px 0 2px"><b>On a computer:</b> <b>gear</b> (bottom left) › <b>Advanced</b> › turn on <b>Developer Mode</b>,
-            then right-click your own name › <b>Copy User ID</b>.</p>
-          <p style="margin:8px 0 0">Paste the number above and tap <b>Save</b>.</p></details>
-        <div style="border-top:1px solid var(--line);margin-top:12px">
-          <label>Friends <span class="muted" id="fCount"></span></label>
-          <p class="muted" style="margin:4px 0 8px">Add riders you ride with. If you chose <b>Friends</b> above, they are also the people who can see you.</p>
-          <div id="fList" class="chips"></div>
-          <label for="fQ">Add a friend</label>
-          <input id="fQ" type="text" autocomplete="off" autocapitalize="off" placeholder="Search Peloton usernames" oninput="friendSearch()">
-          <div id="fResults" class="list" style="margin-top:6px"></div>
-        </div>
-        </details>
+        <button type="button" class="linkish" onclick="showTab('Settings', 'setBuddies')">⚙️ Buddy settings <span class="muted" id="bSumm"></span> ›</button>
       </div>
       <div class="card">
         <div class="toggle" style="margin-top:0"><input type="checkbox" id="bFriendsOnly" onchange="savePrefs(); renderChips(); renderBuddies()">
@@ -321,28 +299,59 @@
         <p class="muted" id="sLast"></p>
         <details id="sDetails" class="muted hidden"><summary>Technical details of the last sync</summary><pre id="sOut"></pre></details>
       </div>
-      <div class="card">
-        <h3 style="margin-top:0">Display</h3>
-        <label style="margin:0 0 2px">Library challenges</label>
-        <div class="toggle" style="margin:2px 0"><input type="checkbox" id="pRetired" onchange="filtersChanged()">
-          <label for="pRetired" style="margin:0">Include retired classes I've done</label></div>
-        <div class="toggle" style="margin:2px 0 10px"><input type="checkbox" id="pPrograms" checked onchange="filtersChanged()">
-          <label for="pPrograms" style="margin:0">Include Peloton program rides</label></div>
-        <label style="margin:0 0 2px">Ride notes</label>
-        <div class="toggle" style="margin:2px 0"><input type="checkbox" id="nRec" onchange="setNoteType('recommendation', this.checked)">
-          <label for="nRec" style="margin:0">🧠 Recommendations</label></div>
-        <div class="toggle" style="margin:2px 0"><input type="checkbox" id="nInfo" onchange="setNoteType('info', this.checked)">
-          <label for="nInfo" style="margin:0">ℹ️ Info</label></div>
-        <div class="toggle" style="margin:2px 0"><input type="checkbox" checked disabled>
-          <label class="muted" style="margin:0">⚠️ Warnings and data issues (always shown)</label></div>
+    </div>
+
+    <div id="pSettings" class="hidden">
+      <div class="setHead"><h2>Settings</h2><button type="button" class="setX" onclick="closeSettings()" aria-label="Close settings">✕</button></div>
+
+      <div class="card set">
+        <h3>Account</h3>
+        <div class="setRow"><span><span class="dotOn"></span><b id="setName"></b></span><button onclick="signOut()">Sign out</button></div>
+        <div id="sSignins" class="hidden"><div class="setSub">Sign in with</div><div id="sSigninsBody"></div></div>
       </div>
-      <div class="card hidden" id="sSignins">
-        <h3 style="margin-top:0">Sign-in methods</h3>
-        <div id="sSigninsBody"></div>
+
+      <div class="card set">
+        <h3>Classes</h3>
+        <div class="toggle"><input type="checkbox" id="pRetired" onchange="filtersChanged()"><label for="pRetired">Show retired classes I've done</label></div>
+        <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="filtersChanged()"><label for="pPrograms">Show Peloton program rides</label></div>
       </div>
-      <div class="card" id="sStrava">
-        <h3 style="margin-top:0">Strava (optional)</h3>
-        <p class="muted" style="margin-top:0">See your power on ride graphs. Only you see it.</p>
+
+      <div class="card set">
+        <h3>Ride notes</h3>
+        <div class="toggle"><input type="checkbox" id="nRec" onchange="setNoteType('recommendation', this.checked)"><label for="nRec">🧠 Recommendations</label></div>
+        <div class="toggle"><input type="checkbox" id="nInfo" onchange="setNoteType('info', this.checked)"><label for="nInfo">ℹ️ Info</label></div>
+        <div class="toggle"><input type="checkbox" checked disabled><label class="muted">⚠️ Warnings and data issues (always on)</label></div>
+      </div>
+
+      <div class="card set" id="setBuddies">
+        <h3>Buddies</h3>
+        <div class="setSub">Who can see me</div>
+        <div class="row" style="gap:16px;margin:2px 0 10px">
+          <label class="radio"><input type="radio" name="bVis" value="Everyone" onchange="saveSettings()"> Everyone</label>
+          <label class="radio"><input type="radio" name="bVis" value="Friends" onchange="saveSettings()"> Friends</label>
+          <label class="radio"><input type="radio" name="bVis" value="Nobody" onchange="saveSettings()"> Just me</label>
+        </div>
+        <label class="setSub" for="bDiscord">Discord user ID</label>
+        <div class="row" style="flex-wrap:nowrap;gap:8px">
+          <input id="bDiscord" type="text" autocomplete="off" autocapitalize="off" placeholder="e.g. 123456789012345678"
+                 style="flex:1;min-width:0;max-width:260px">
+          <button id="bSave" onclick="saveSettings()">Save</button>
+        </div>
+        <div class="muted" id="bSaved" style="font-size:13px;min-height:16px"></div>
+        <details class="muted"><summary>How do I find it?</summary>
+          <p style="margin:6px 0 2px"><b>Phone:</b> profile picture › gear › <b>Advanced</b> › turn on <b>Developer Mode</b>.
+            Then tap your name on one of your messages › <b>⋯</b> › <b>Copy User ID</b>.</p>
+          <p style="margin:6px 0 0"><b>Computer:</b> gear › <b>Advanced</b> › <b>Developer Mode</b>, then right-click your name › <b>Copy User ID</b>.</p>
+          <p style="margin:6px 0 0">An ID makes buddy posts actually ping you; a username only names you.</p></details>
+        <div class="setSub" style="margin-top:12px">Friends <span id="fCount"></span></div>
+        <div id="fList" class="chips"></div>
+        <input id="fQ" type="text" autocomplete="off" autocapitalize="off" placeholder="Add a friend: search Peloton usernames" oninput="friendSearch()" style="margin-top:6px">
+        <div id="fResults" class="list" style="margin-top:6px"></div>
+      </div>
+
+      <div class="card set" id="sStrava">
+        <h3>Strava</h3>
+        <p class="muted" style="margin:0 0 6px">Your power on ride graphs. Only you see it.</p>
         <div id="sStravaBody"></div>
       </div>
     </div>
@@ -481,7 +490,7 @@
     try { me = await api('unlink', { provider: provider }); renderSignins(); } catch (e) { showError(e); }
   }
   const providerName = p => ({ discord: 'Discord', reddit: 'Reddit', google: 'Google' })[p] || p;
-  // Sync tab: the sign-in methods on this account, with add / remove (at least one must stay).
+  // Settings › Account: the sign-in methods on this account, with add / remove (at least one must stay).
   function renderSignins() {
     if (BACKEND !== 'cf' || !me || !me.signins) return;
     const has = new Set(me.signins.map(x => x.provider));
@@ -700,17 +709,26 @@
     if (WIDE.matches) $('pRight').scrollTop = 0;
     else $('pList').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
-  function showTab(name) {
+  let lastTab = 'Progress';
+  function showTab(name, scrollTo) {
+    if (name !== 'Settings') lastTab = name;
     currentTab = name;
     document.body.classList.toggle('wideProgress', name === 'Progress');
-    ['Progress', 'Buddies', 'Sync'].forEach(n => {
+    ['Progress', 'Buddies', 'Sync', 'Settings'].forEach(n => {
       $('p' + n).classList.toggle('hidden', n !== name);
-      $('t' + n).classList.toggle('on', n === name);
+      if ($('t' + n)) $('t' + n).classList.toggle('on', n === name);
     });
-    $('gearBtn').classList.toggle('on', name === 'Sync');
+    $('gearBtn').classList.toggle('on', name === 'Settings');
     if (name === 'Progress') loadProgress();
-    if (name === 'Buddies') { fillSettings(); loadBuddies(); }
+    if (name === 'Buddies') { renderSettingsSummary(); loadBuddies(); }
+    if (name === 'Settings') {
+      $('setName').textContent = me.rider ? me.rider.pelotonUsername : '';
+      fillSettings();
+      if (scrollTo) setTimeout(() => $(scrollTo).scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+      else window.scrollTo(0, 0);
+    }
   }
+  function closeSettings() { showTab(lastTab); }
 
   // RedditPZ programs have their own fixed class list, so the library filters don't apply to them.
   function isRpzProgram() {
@@ -1254,7 +1272,6 @@
     renderFriends();
     $('bDiscord').value = me.rider.discordName || '';
     renderSettingsSummary();
-    if (!me.rider.discordName) $('bSettings').open = true;
     $('bSaved').textContent = '';
   }
 
@@ -1345,10 +1362,10 @@
   }
 
   function renderSettingsSummary() {
-    const vis = { Everyone: 'visible to everyone', Friends: 'visible to friends', Nobody: 'visible to just me' }[me.rider.visibility] || '';
+    const vis = { Everyone: 'everyone', Friends: 'friends', Nobody: 'just me' }[me.rider.visibility] || '';
     const n = (me.friends || []).length;
-    $('bSumm').textContent = '(' + [vis, me.rider.discordName ? 'Discord set' : 'no Discord ID',
-                                    n + ' friend' + (n === 1 ? '' : 's')].filter(Boolean).join(' · ') + ')';
+    $('bSumm').textContent = [vis && 'seen by ' + vis, n + ' friend' + (n === 1 ? '' : 's'), me.rider.discordName ? '' : 'no Discord ID']
+      .filter(Boolean).join(' · ');
   }
 
   // ----- Friends -----
