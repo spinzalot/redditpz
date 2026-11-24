@@ -95,6 +95,16 @@
     .list .zs { height:6px; margin:4px 0 2px; }
     .grid.cal .notec { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
     .listbar { display:flex; align-items:center; gap:10px; margin:0 0 10px; }
+    /* Sort buttons always stay on the top line; if space runs out, the counts slip under the title instead. */
+    .listhead { display:flex; align-items:center; gap:8px; margin:0 0 10px; }
+    .listhead .ltitle { display:flex; align-items:center; flex-wrap:wrap; column-gap:8px; row-gap:2px; min-width:0; flex:1 1 auto; }
+    .listhead > :last-child { flex:0 0 auto; }
+    .listhead h3 { margin:0; white-space:nowrap; }
+    .listhead .lcounts { font-size:14px; white-space:nowrap; display:flex; gap:6px; align-items:center; }
+    .listhead .lcDone { color:var(--done); font-weight:700; }
+    .listhead > :last-child { margin-left:auto; }
+    .lshow { margin:-4px 0 10px; }
+    .lshow label { margin:0; font-size:13px; }
     .sheet.pwr { position:relative; }
     .pwrX { position:absolute; top:8px; right:8px; width:30px; height:30px; padding:0; border-radius:50%; border:0;
             background:#f2f2f7; color:#636366; font-size:15px; line-height:30px; }
@@ -1014,10 +1024,16 @@
       }
       return dir * (b.air - a.air);
     });
-    let h = '<h3 style="margin-top:0">' + len + ' min ' + esc(TYPE_SHORT[type] || type) + '</h3>' +
-            '<div class="listbar"><div class="toggle" style="margin:0"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
-            ' onchange="showDone=this.checked; savePrefs(); pickCell(' + len + ',\'' + type + '\', true)">' +
-            '<label for="lShowDone" style="margin:0">Show done (' + doneCount + ')</label></div>' + sortSwitch(len, type) + '</div>';
+    // Header: "90m PZE  21 ✓ · 9 left!   [Ridden | Aired ↓]", then a small Show done box under the counts.
+    const left = all.length - doneCount;
+    const counts = left === 0 ? '<span class="lcDone">All ' + doneCount + ' ✓</span> 🎉'
+      : (doneCount ? '<span class="lcDone">' + doneCount + ' ✓</span><span class="muted">·</span>' : '') +
+        '<span>' + (left === 1 ? 'Just 1 left!' : left + ' left!') + '</span>';
+    let h = '<div class="listhead"><div class="ltitle"><h3>' + len + 'm ' + esc(TYPE_SHORT[type] || type) + '</h3>' +
+            '<span class="lcounts">' + counts + '</span></div>' + sortSwitch(len, type) + '</div>' +
+            (doneCount ? '<div class="toggle lshow"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
+              ' onchange="showDone=this.checked; savePrefs(); pickCell(' + len + ',\'' + type + '\', true)">' +
+              '<label for="lShowDone">Show done</label></div>' : '');
     if (!cs.length) h += '<p class="muted">All done in this cell! 🎉</p>';
     h += '<div class="list">';
     cs.forEach(c => {
