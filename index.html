@@ -21,6 +21,12 @@
       color:#334155; display:flex; align-items:center; justify-content:center; }
     header .gear.on { background:#111; color:#fff; border-color:#111; }
     header .gear.hidden { display:none; }
+    header .gear { position:relative; }
+    header .gear .dot { position:absolute; top:0; right:0; width:10px; height:10px; border-radius:50%; background:#f97316; border:2px solid #fff; }
+    header .gear .dot.hidden { display:none; }
+    header .gear.spin svg { animation:spin 1s linear infinite; }
+    header .gear.ok { color:#16a34a; border-color:#16a34a; }
+    @keyframes spin { to { transform:rotate(360deg); } }
     /* Signed in or not, always said in the header. */
     header .who #whoState { display:inline-block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
     header .who.in #whoState { color:#111; font-weight:600; max-width:110px; }
@@ -173,6 +179,8 @@
   <h1>RedditPZ Challenges</h1>
   <div class="hdrR">
     <div class="who" id="who"><span id="whoState">Not signed in</span><br><button class="hidden" id="signOutBtn" onclick="signOut()">Sign out</button></div>
+    <button type="button" class="gear hidden" id="syncIcon" onclick="syncTap()" title="Sync your Peloton rides" aria-label="Sync"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.3 4.9"/><path d="M4 12a8 8 0 0 1 14.3-4.9"/><path d="M18.6 3v4.2h-4.2"/><path d="M5.4 21v-4.2h4.2"/></svg><span class="dot hidden" id="syncDot"></span></button>
+    <input type="file" id="syncPick" accept=".csv,text/csv" class="hidden" onchange="syncPicked(this)">
     <button type="button" class="gear hidden" id="gearBtn" onclick="showTab('Sync')" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
@@ -504,7 +512,7 @@
     $('who').classList.add('in'); $('signOutBtn').classList.remove('hidden');
     $('whoState').textContent = me.rider ? me.rider.pelotonUsername : (me.name || 'Signed in');
     $('who').title = 'Signed in as ' + $('whoState').textContent;
-    if (me.rider) $('gearBtn').classList.remove('hidden');
+    if (me.rider) { $('gearBtn').classList.remove('hidden'); $('syncIcon').classList.remove('hidden'); }
     if (me.rider) enterApp(); else $('vJoin').classList.remove('hidden');
   }
   function signOut() {
@@ -551,7 +559,7 @@
       me = await api('join', { pelotonUsername: $('jPeloton').value, discordName: cleanDiscord($('jDiscord').value) });
       $('vJoin').classList.add('hidden');
       $('whoState').textContent = me.rider.pelotonUsername; $('who').title = 'Signed in as ' + me.rider.pelotonUsername;
-      $('gearBtn').classList.remove('hidden');
+      $('gearBtn').classList.remove('hidden'); $('syncIcon').classList.remove('hidden');
       enterApp();
     } catch (e) { showError(e); } finally { $('jBtn').disabled = false; }
   }
@@ -1021,16 +1029,24 @@
   }
 
   // ----- Sync -----
-  async function sync() {
+  function sync() {
     clearError();
     const f = $('sFile').files[0];
     if (!f) return showError(new Error('Pick your workouts CSV first.'));
+    return syncFile(f, false);
+  }
+  function rightName(f) {
     const expected = (me.rider.pelotonUsername + '_workouts').toLowerCase();
-    if (f.name.toLowerCase().indexOf(expected) !== 0 &&
-        !confirm('This file is named "' + f.name + '", not ' + me.rider.pelotonUsername + '_workouts.csv. Sync it anyway?')) return;
+    return f.name.toLowerCase().indexOf(expected) === 0 ||
+      confirm('This file is named "' + f.name + '", not ' + me.rider.pelotonUsername + '_workouts.csv. Sync it anyway?');
+  }
+  async function syncFile(f, fromIcon, text) {
+    if (!fromIcon && !rightName(f)) return;
     $('sBtn').disabled = true; $('sBtn').textContent = 'Syncing... up to a minute';
+    syncIconState('spin');
+    let ok = false;
     try {
-      const slim = slimWorkouts(await f.text());
+      const slim = slimWorkouts(text || await f.text());
       const r = await api('sync', { csvText: slim.csv });   // one trip: sync + what's new + refreshed profile
       $('sOut').textContent = 'Sent ' + slim.kept + ' of ' + slim.total + ' workouts in the file (' +
         (slim.full ? 'full history' : 'cycling rides from a week before your newest stored ride') + ').\n\n' + r.report;
@@ -1041,10 +1057,89 @@
       $('sLast').textContent = 'Last synced: ' + new Date(me.rider.lastSync || Date.now()).toLocaleString();
       checkSyncPrompt();
       $('sFull').checked = false;
+      if (slim.newest) try { localStorage.setItem(newestKey(), String(slim.newest)); } catch (e) {}
       showSyncResult(r.newly || []);
       showTab('Progress');
+      ok = true;
     } catch (e) { showError(e); }
-    finally { $('sBtn').disabled = false; $('sBtn').textContent = 'Sync'; }
+    finally { $('sBtn').disabled = false; $('sBtn').textContent = 'Sync'; syncIconState(ok ? 'ok' : ''); }
+  }
+
+  // ----- The ↻ button: sync in a tap or two -----
+  // Chrome and Edge on a computer remember the workouts file itself (File System Access API, handle kept in
+  // IndexedDB), so a tap re-reads it. Everywhere else (iPhone, Firefox) a tap opens the file picker. Either way
+  // the newest ride inside the file decides: newer than the last sync -> sync now; otherwise say so.
+  const CAN_REMEMBER = typeof window.showOpenFilePicker === 'function';
+  const newestKey = () => 'rpzFileNewest:' + me.rider.pelotonUsername;
+  function syncIconState(st) {
+    const b = $('syncIcon'); b.classList.toggle('spin', st === 'spin'); b.classList.toggle('ok', st === 'ok');
+    if (st === 'ok') setTimeout(() => b.classList.remove('ok'), 2500);
+  }
+  function idb(mode, fn) {
+    return new Promise((res, rej) => {
+      const o = indexedDB.open('rpz', 1);
+      o.onupgradeneeded = () => o.result.createObjectStore('kv');
+      o.onerror = () => rej(o.error);
+      o.onsuccess = () => {
+        try { const t = o.result.transaction('kv', mode); const q = fn(t.objectStore('kv'));
+              t.oncomplete = () => res(q && q.result); t.onerror = t.onabort = () => rej(t.error); }
+        catch (e) { rej(e); }   // never leave the tap waiting
+      };
+      o.onblocked = () => rej(new Error('blocked'));
+    });
+  }
+  const getHandle = () => idb('readonly', st => st.get('workouts')).catch(() => null);
+  const putHandle = h => idb('readwrite', st => h ? st.put(h, 'workouts') : st.delete('workouts')).catch(() => {});
+  async function syncTap(pickAnew) {
+    clearError(); $('pSynced').classList.add('hidden');
+    if ($('syncIcon').classList.contains('spin')) return;
+    if (!CAN_REMEMBER) { $('syncPick').value = ''; $('syncPick').click(); return; }   // must stay inside the tap
+    try {
+      let h = pickAnew ? null : await getHandle();
+      if (h && (await h.queryPermission({ mode: 'read' })) !== 'granted' && (await h.requestPermission({ mode: 'read' })) !== 'granted') h = null;
+      let f = null;
+      if (h) { try { f = await h.getFile(); } catch (e) { h = null; } }   // moved or deleted: pick again
+      if (!h) {
+        [h] = await window.showOpenFilePicker({ id: 'rpzWorkouts', startIn: 'downloads',
+          types: [{ description: 'Peloton workouts', accept: { 'text/csv': ['.csv'] } }] });
+        f = await h.getFile();
+        if (!rightName(f)) return;
+        await putHandle(h);
+      }
+      await checkAndSync(f, true);
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;   // closed the picker
+      if (e && e.name === 'SecurityError') return showError(new Error('Tap ↻ again to pick your workouts file.'));
+      showError(e);
+    }
+  }
+  function syncPicked(input) { const f = input.files[0]; if (f && rightName(f)) checkAndSync(f, false); }
+  async function checkAndSync(f, remembered) {
+    const text = await f.text();
+    const newest = newestRide(text);
+    let last = me.rider.lastRideAt || 0;
+    try { last = Math.max(last, Number(localStorage.getItem(newestKey())) || 0); } catch (e) {}
+    if (!newest || newest > last || needFullSync()) return syncFile(f, true, text);
+    nothingNew(newest, remembered);
+  }
+  function newestRide(text) {   // newest cycling ride in the file, epoch seconds
+    const rows = parseCsv(text), head = (rows.shift() || []).map(h => String(h).trim().toLowerCase());
+    const ts = head.indexOf('workout timestamp'), disc = head.indexOf('fitness discipline');
+    if (ts < 0) return 0;
+    let max = 0;
+    rows.forEach(r => { if (disc < 0 || String(r[disc]).trim().toLowerCase() === 'cycling') max = Math.max(max, tsEpoch(r[ts]) || 0); });
+    return max;
+  }
+  function nothingNew(newest, remembered) {
+    const when = new Date(newest * 1000).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    $('pSynced').innerHTML = '<div class="row" style="justify-content:space-between"><b>Nothing new to sync</b>' +
+      '<button style="font-size:13px;padding:4px 10px" onclick="$(\'pSynced\').classList.add(\'hidden\')">×</button></div>' +
+      '<p style="margin:6px 0">The newest ride in this file is from ' + esc(when) + ', and that\'s already synced. Download a fresh file from Peloton' +
+      (remembered ? ', saving it over <b>' + esc(me.rider.pelotonUsername) + '_workouts.csv</b> (choose Replace),' : '') + ' then tap ↻ again.</p>' +
+      '<div class="row"><button class="primary" onclick="window.open(\'https://members.onepeloton.com/profile/workouts\', \'_blank\', \'noopener\')">Open Peloton workouts</button>' +
+      (remembered ? '<button onclick="syncTap(true)">Choose another file</button>' : '') + '</div>';
+    $('pSynced').classList.remove('hidden');
+    showTab('Progress');
   }
 
   // ----- Trimming the workouts file on the phone before upload -----
@@ -1069,7 +1164,8 @@
     const cutoff = full ? -Infinity : me.rider.lastRideAt - 7 * 86400;
     const keep = rows.filter(r => r.length > idx[3] && String(r[idx[3]]).trim().toLowerCase() === 'cycling' &&
                                   (full || (tsEpoch(r[idx[0]]) ?? Infinity) >= cutoff));
-    return { csv: toCsv([NEED_COLS].concat(keep.map(r => idx.map(i => r[i])))), kept: keep.length, total: rows.length, full: full };
+    const newest = rows.reduce((m, r) => String(r[idx[3]] || '').trim().toLowerCase() === 'cycling' ? Math.max(m, tsEpoch(r[idx[0]]) || 0) : m, 0);
+    return { csv: toCsv([NEED_COLS].concat(keep.map(r => idx.map(i => r[i])))), kept: keep.length, total: rows.length, full: full, newest: newest };
   }
 
   function parseCsv(text) {
@@ -1103,10 +1199,11 @@
   // Banner on Progress when a challenge changed since my last sync.
   function checkSyncPrompt() {
     const stale = me.rider.lastSync ? staleChallenges().filter(c => !c.hidden) : [];
+    $('syncDot').classList.toggle('hidden', !!me.rider.lastSync && !stale.length);
     if (!stale.length) { $('pSyncPrompt').classList.add('hidden'); return; }
     $('pSyncPrompt').innerHTML = '📣 <b>' + stale.map(c => esc(c.name)).join(', ') + '</b> ' +
       (stale.length === 1 ? 'was' : 'were') + ' added or updated since your last sync. Sync to get credit for rides you\'ve already done. ' +
-      '<p style="margin:8px 0 0"><button class="primary" onclick="showTab(\'Sync\')">Sync now</button></p>';
+      '<p style="margin:8px 0 0"><button class="primary" onclick="syncTap()">Sync now</button></p>';
     $('pSyncPrompt').classList.remove('hidden');
   }
 
