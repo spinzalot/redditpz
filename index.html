@@ -151,6 +151,12 @@
     .pwrX { position:absolute; top:8px; right:8px; width:30px; height:30px; padding:0; border-radius:50%; border:0;
             background:#f2f2f7; color:#636366; font-size:15px; line-height:30px; }
     .pwrTop { min-height:32px; display:flex; align-items:center; padding-right:40px; margin-bottom:8px; font-size:15px; }
+    .pwrStrava { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; min-height:0; }
+    .pwrStrava:empty { display:none; }
+    .pwrStrava .pwdStrava { height:24px; }
+    .viewStrava { color:#FC5200; font-weight:700; font-size:14px; margin-left:auto; }
+    .stravaBtn { background:none; border:none; padding:0; cursor:pointer; line-height:0; }
+    .stravaBtn img { height:48px; width:auto; }
     .pwrTop select { font-size:16px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:#fff; max-width:100%; }
     .pwrMsg { margin:0 0 6px; }
     .pwrBtns { margin-top:12px; }
@@ -266,6 +272,7 @@
       <button type="button" class="sbtn discord hidden" id="discordBtn" onclick="discordStart('signin')"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18a19.7 19.7 0 0 0 6 3l1.3-2a12.7 12.7 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2a19.6 19.6 0 0 0 6-3c.5-5.1-.8-9.5-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.5 8 10.5s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg> Sign in with Discord</button>
       <div id="gbtn"></div>
     </div>
+    <p class="muted" style="font-size:13px;margin:12px 0 0"><a href="privacy.html" target="_blank" rel="noopener">Privacy: what we keep and who sees it</a></p>
   </section>
 
   <!-- Join -->
@@ -378,7 +385,7 @@
       <details class="card set" name="settings" id="sStrava" ontoggle="setToggled(this)">
         <summary><h3>Strava</h3><span class="setSum" id="sumStrava"></span></summary>
         <div class="setBody">
-        <p class="muted" style="margin:0 0 6px">Your power on ride graphs. Only you see it.</p>
+        <p class="muted" style="margin:0 0 6px">Your power on ride graphs. Only you see it. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
         <div id="sStravaBody"></div>
         </div>
       </details>
@@ -1730,7 +1737,10 @@
     $('sStravaBody').innerHTML = st.connected
       ? '<p style="margin:0 0 8px">Connected' + (st.name ? ' as <b>' + esc(st.name) + '</b>' : '') + '.</p>' +
         '<button onclick="disconnectStrava()">Disconnect Strava</button>'
-      : '<button class="primary" style="background:#fc4c02;border-color:#fc4c02" onclick="connectStrava()">Connect Strava</button>';
+      // Strava's official "Connect with Strava" button (strava/, from their brand guidelines page); plain button until it's there.
+      : '<button type="button" class="stravaBtn" onclick="connectStrava()" aria-label="Connect with Strava">' +
+        '<img src="strava/btn_strava_connect_with_orange.svg" alt="Connect with Strava" height="48" ' +
+        'onerror="this.parentNode.outerHTML=\'<button class=&quot;primary&quot; style=&quot;background:#fc4c02;border-color:#fc4c02&quot; onclick=&quot;connectStrava()&quot;>Connect Strava</button>\'"></button>';
   }
   function connectStrava() {
     const mobile = matchMedia('(pointer: coarse)').matches;   // phones: hand off to the Strava app if installed
@@ -1828,6 +1838,7 @@
       ' style="width:80px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:8px" oninput="drawPower()">' +
       '<label style="margin:0 0 0 8px;display:flex;align-items:center;gap:6px" title="Zone watts on the graph. They give away your FTP, so they\'re off unless you turn them on.">' +
       '<input type="checkbox" id="powerWatts"' + (showWatts ? ' checked' : '') + ' onchange="setWatts(this.checked)">Watts</label></div>' +
+      '<div class="pwrStrava" id="powerStrava"></div>' +
       '<div class="row pwrBtns"><button class="primary" id="powerCopy" disabled onclick="sharePower(false)">Copy</button>' +
       (CAN_SHARE ? '<button id="powerShare" disabled onclick="sharePower(true)">Share</button>' : '') + '</div></div>';
     box.onclick = closePower;
@@ -1849,6 +1860,7 @@
     const c = powerClass; if (!c) return;
     const rodeAt = $('powerRide') ? Number($('powerRide').value) : powerTimes[0];
     powerData = null; powerFailed = '';
+    if ($('powerStrava')) $('powerStrava').innerHTML = '';
     powerStatus('Getting your ride from Strava...');
     $('powerMine').disabled = false;
     const key = rodeAt + '|' + c.len;
@@ -1858,6 +1870,9 @@
       if (powerClass !== c || ($('powerRide') && Number($('powerRide').value) !== rodeAt)) return;
       powerData = data;
       if (!$('powerFtp').value && data.ftp) $('powerFtp').value = data.ftp;
+      // Strava's brand rules: data from Strava links back to it ("View on Strava").
+      $('powerStrava').innerHTML = data.id ? STRAVA_BADGE + '<a class="viewStrava" href="https://www.strava.com/activities/' + Number(data.id) +
+        '" target="_blank" rel="noopener">View on Strava</a>' : '';
     } catch (e) {
       if (powerClass !== c) return;
       powerFailed = 'Couldn\'t get your power from Strava: ' + (e.message || String(e));
@@ -1867,6 +1882,8 @@
   }
   const powerCache = new Map();
   let showMine = true, powerFailed = '';
+  // "Powered by Strava" (official artwork in strava/, from Strava's brand guidelines page) beside the link.
+  const STRAVA_BADGE = '<img class="pwdStrava" src="strava/api_logo_pwrdBy_strava_horiz_orange.svg" alt="Powered by Strava" onerror="this.remove()">';
   // Zone watts on the graph: off by default because they give away FTP; what's on screen is what gets copied.
   let showWatts = false; try { showWatts = localStorage.getItem('rpzWatts') === '1'; } catch (e) {}
   function setWatts(on) { showWatts = on; try { localStorage.setItem('rpzWatts', on ? '1' : '0'); } catch (e) {} drawPower(); }
