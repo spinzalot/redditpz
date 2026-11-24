@@ -285,12 +285,6 @@
 
     <div id="pProgress">
       <div id="pLeft">
-      <div class="card" id="pToggles">
-        <div class="toggle" style="margin-top:0"><input type="checkbox" id="pRetired" onchange="filtersChanged()">
-          <label for="pRetired" style="margin:0">Include retired classes I've done</label></div>
-        <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="filtersChanged()">
-          <label for="pPrograms" style="margin:0">Include Peloton program rides</label></div>
-      </div>
       <div class="card hidden" id="pSyncPrompt"></div>
       <div class="card hidden" id="pSynced"></div>
       <div class="card" id="pSummary"><span class="muted">Loading...</span></div>
@@ -319,6 +313,11 @@
       </div>
       <div class="card">
         <h3 style="margin-top:0">Display</h3>
+        <label style="margin:0 0 2px">Library challenges</label>
+        <div class="toggle" style="margin:2px 0"><input type="checkbox" id="pRetired" onchange="filtersChanged()">
+          <label for="pRetired" style="margin:0">Include retired classes I've done</label></div>
+        <div class="toggle" style="margin:2px 0 10px"><input type="checkbox" id="pPrograms" checked onchange="filtersChanged()">
+          <label for="pPrograms" style="margin:0">Include Peloton program rides</label></div>
         <label style="margin:0 0 2px">Ride notes</label>
         <div class="toggle" style="margin:2px 0"><input type="checkbox" id="nRec" onchange="setNoteType('recommendation', this.checked)">
           <label for="nRec" style="margin:0">🧠 Recommendations</label></div>
@@ -715,7 +714,6 @@
 
   // Draws from the cache right away (if there is one), then refreshes from the back end.
   async function loadProgress() {
-    $('pToggles').classList.toggle('hidden', isRpzProgram());
     clearError();
     const id = $('cChallenge').value;
     const cached = cache.progress[id];
