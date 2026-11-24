@@ -110,6 +110,20 @@
     .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
     .list .zs { height:6px; margin:4px 0 2px; }
     .grid.cal .notec { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
+    /* Help: ? buttons and the Help screen */
+    .hq { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; padding:0; margin:0 0 0 6px;
+          border-radius:50%; border:1.5px solid #8e8e93; background:#fff; color:#636366; font-size:12px; font-weight:700; line-height:1;
+          vertical-align:middle; cursor:pointer; flex:0 0 auto; }
+    .hq:hover { border-color:var(--ink); color:var(--ink); }
+    h1 .hqTitle { width:22px; height:22px; font-size:13px; margin-left:8px; vertical-align:2px; }
+    #helpBody details { scroll-margin-top:calc(var(--hdrH, 64px) + 8px); background:#fff; border:1px solid var(--line); border-radius:12px; margin:0 0 8px; }
+    #helpBody summary { list-style:none; display:flex; align-items:center; padding:14px 16px; font-weight:700; cursor:pointer; }
+    #helpBody summary::-webkit-details-marker { display:none; }
+    #helpBody summary::after { content:'›'; margin-left:auto; color:var(--muted); font-size:20px; line-height:1; transition:transform .15s; }
+    #helpBody details[open] > summary::after { transform:rotate(90deg); }
+    #helpBody .hb { padding:0 16px 12px; }
+    #helpBody .hb p, #helpBody .hb li { font-size:15px; margin:6px 0; line-height:1.5; }
+    #helpBody .hb ul { padding-left:20px; margin:6px 0; }
     /* Settings */
     .setHead { display:flex; align-items:center; justify-content:space-between; margin:4px 0 8px; }
     .setHead h2 { margin:0; font-size:20px; }
@@ -275,7 +289,7 @@
 </head>
 <body>
 <header>
-  <h1>RedditPZ Challenges</h1>
+  <h1>RedditPZ Challenges<button type="button" class="hq hqTitle" onclick="openHelp()" aria-label="Help" title="Help">?</button></h1>
   <!-- Challenge picker: beside the title in landscape and on wide screens, on its own row below it in portrait. -->
   <div id="chalBox" class="hidden">
     <select id="cChallenge" onchange="challengeChanged()" aria-label="Challenge" title="Challenge"></select>
@@ -298,7 +312,7 @@
 
   <!-- Sign in -->
   <section id="vSignin" class="card">
-    <p>Track your progress through RedditPZ challenges and find riding buddies.</p>
+    <p>Track your progress through RedditPZ challenges and find riding buddies.<button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('start')" aria-label="Help" title="Help">?</button></p>
     <div class="signins">
       <button type="button" class="sbtn discord hidden" id="discordBtn" onclick="discordStart('signin')"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18a19.7 19.7 0 0 0 6 3l1.3-2a12.7 12.7 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2a19.6 19.6 0 0 0 6-3c.5-5.1-.8-9.5-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.5 8 10.5s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg> Sign in with Discord</button>
       <div id="gbtn"></div>
@@ -352,7 +366,7 @@
     </div>
 
     <div id="pSync" class="hidden">
-      <div class="setHead"><h2>Sync</h2><button type="button" class="setX" onclick="closeSettings()" aria-label="Close sync">✕</button></div>
+      <div class="setHead"><h2>Sync<button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('sync')" aria-label="Help" title="Help">?</button></h2><button type="button" class="setX" onclick="closeSettings()" aria-label="Close sync">✕</button></div>
       <div class="card">
         <ol>
           <li>Open <a href="https://members.onepeloton.com/profile/workouts" target="_blank" rel="noopener">your Peloton workouts page</a>
@@ -370,17 +384,22 @@
       </div>
     </div>
 
+    <div id="pHelp" class="hidden">
+      <div class="setHead"><h2>Help</h2><button type="button" class="setX" onclick="closeHelp()" aria-label="Close help">✕</button></div>
+      <div id="helpBody"><p class="muted">Loading...</p></div>
+    </div>
+
     <div id="pSettings" class="hidden">
       <div class="setHead"><h2>Settings</h2><button type="button" class="setX" onclick="closeSettings()" aria-label="Close settings">✕</button></div>
       <details class="card set" name="settings" id="setClasses" ontoggle="setToggled(this)">
-        <summary><h3>Classes</h3><span class="setSum" id="sumClasses"></span></summary>
+        <summary><h3>Classes</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('settings')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumClasses"></span></summary>
         <div class="setBody">
         <div class="toggle"><input type="checkbox" id="pRetired" onchange="filtersChanged()"><label for="pRetired">Show retired classes I've done</label></div>
         <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="filtersChanged()"><label for="pPrograms">Show Peloton program rides</label></div>
         </div>
       </details>
       <details class="card set" name="settings" id="setNotes" ontoggle="setToggled(this)">
-        <summary><h3>Ride notes</h3><span class="setSum" id="sumNotes"></span></summary>
+        <summary><h3>Ride notes</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('notes')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumNotes"></span></summary>
         <div class="setBody">
         <div class="toggle"><input type="checkbox" id="nRec" onchange="setNoteType('recommendation', this.checked)"><label for="nRec">🧠 Recommendations</label></div>
         <div class="toggle"><input type="checkbox" id="nInfo" onchange="setNoteType('info', this.checked)"><label for="nInfo">ℹ️ Info</label></div>
@@ -388,7 +407,7 @@
         </div>
       </details>
       <details class="card set" name="settings" id="setBuddies" ontoggle="setToggled(this)">
-        <summary><h3>Buddies</h3><span class="setSum" id="sumBuddies"></span></summary>
+        <summary><h3>Buddies</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('buddies')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumBuddies"></span></summary>
         <div class="setBody">
         <div class="setSub">Who can see me</div>
         <div class="row" style="gap:16px;margin:2px 0 10px">
@@ -415,14 +434,14 @@
         </div>
       </details>
       <details class="card set" name="settings" id="sStrava" ontoggle="setToggled(this)">
-        <summary><h3>Strava</h3><span class="setSum" id="sumStrava"></span></summary>
+        <summary><h3>Strava</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('graphs')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumStrava"></span></summary>
         <div class="setBody">
         <p class="muted" style="margin:0 0 6px">Your power on ride graphs. Only you see it. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
         <div id="sStravaBody"></div>
         </div>
       </details>
       <details class="card set" name="settings" id="setAccount" ontoggle="setToggled(this)">
-        <summary><h3>Account</h3><span class="setSum" id="sumAccount"></span></summary>
+        <summary><h3>Account</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('start')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumAccount"></span></summary>
         <div class="setBody">
         <div class="setRow"><span class="muted" style="font-size:14px">Signed in as <b id="setName"></b></span><button onclick="signOut()">Sign out</button></div>
         <div id="sSignins" class="hidden"><div class="setSub">Sign in with</div><div id="sSigninsBody"></div></div>
@@ -789,10 +808,10 @@
   }
   let lastTab = 'Progress';
   function showTab(name, scrollTo) {
-    if (name !== 'Settings' && name !== 'Sync') lastTab = name;
+    if (name !== 'Settings' && name !== 'Sync' && name !== 'Help') lastTab = name;
     currentTab = name;
     document.body.classList.toggle('wideProgress', name === 'Progress');
-    ['Progress', 'Buddies', 'Sync', 'Settings'].forEach(n => {
+    ['Progress', 'Buddies', 'Sync', 'Settings', 'Help'].forEach(n => {
       $('p' + n).classList.toggle('hidden', n !== name);
       if ($('t' + n)) $('t' + n).classList.toggle('on', n === name);
     });
@@ -809,6 +828,42 @@
     }
   }
   function closeSettings() { showTab(lastTab); }
+
+  // ----- Help -----
+  // help.html holds the text (loaded the first time Help opens). ? buttons open it at one section;
+  // the ? by the title opens it with everything collapsed. ✕ goes back to the screen you came from.
+  let helpFrom = 'Progress', helpLoaded = null;
+  function loadHelp() {
+    return helpLoaded || (helpLoaded = fetch('help.html').then(r => r.text()).then(t => {
+      const d = new DOMParser().parseFromString(t, 'text/html'), c = d.getElementById('helpContent');
+      $('helpBody').innerHTML = c ? c.innerHTML : '<p class="muted">Help is unavailable right now.</p>';
+      $('helpBody').querySelectorAll('details').forEach(x => x.addEventListener('toggle', () => {
+        if (x.open) $('helpBody').querySelectorAll('details[open]').forEach(o => { if (o !== x) o.open = false; });
+      }));
+    }).catch(() => { helpLoaded = null; $('helpBody').innerHTML = '<p class="muted">Couldn\'t load help. Check your connection and try again.</p>'; }));
+  }
+  async function openHelp(section) {
+    closePopups();
+    if (currentTab !== 'Help') helpFrom = currentTab || 'Progress';
+    showTabPlain('Help');
+    await loadHelp();
+    $('helpBody').querySelectorAll('details').forEach(d => { d.open = !!section && d.id === 'h-' + section; });
+    const t = section && $('h-' + section);
+    if (t) t.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
+  }
+  function closeHelp() { helpFrom === 'Settings' ? showTab('Settings') : helpFrom === 'Sync' ? showTab('Sync') : showTab(helpFrom); }
+  function showTabPlain(name) {   // switch screens without the per-screen loading showTab does
+    currentTab = name;
+    document.body.classList.remove('wideProgress');
+    ['Progress', 'Buddies', 'Sync', 'Settings', 'Help'].forEach(n => {
+      $('p' + n).classList.toggle('hidden', n !== name);
+      if ($('t' + n)) $('t' + n).classList.toggle('on', n === name);
+    });
+    $('gearBtn').classList.remove('on'); $('syncIcon').classList.remove('on');
+  }
+  function closePopups() {   // the graph sheet and buddy-post sheet, if open
+    closePower(); closeWhen();
+  }
   if (!new URLSearchParams(location.search).has('tabs')) $('tabBar').classList.add('hidden');
   // Settings sections: one open at a time; each collapsed row says what's set inside it.
   function setToggled(d) {
@@ -986,7 +1041,7 @@
       otherNote(p) + '</div><div class="seg tshow">' +
       (cal && ZONES ? '<button type="button" class="' + (zonesOn ? 'on' : '') + '" title="Each class\'s time in each power zone" onclick="tileMode(\'zones\')">' + legend + 'Zones</button>' : '') +
       '<button type="button" class="' + (buddyOn ? 'on' : '') + '" title="Who else still needs each class" onclick="tileMode(\'buddies\')">👥<span class="tlab"> Buddies</span></button>' +
-      '</div></div>';
+      '</div><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'tiles\')" aria-label="Help" title="Help">?</button></div>';
   }
   function tileMode(m) {
     if (m === 'zones') {
@@ -1229,7 +1284,7 @@
       : (doneCount ? '<span class="lcDone">' + doneCount + ' ✓</span><span class="muted">·</span>' : '') +
         '<span>' + (left === 1 ? 'Just 1 left!' : left + ' left!') + '</span>';
     let h = '<div class="listhead"><div class="ltitle"><h3>' + title + '</h3>' +
-            '<span class="lcounts">' + counts + '</span></div>' + sortSwitch() + '</div>' +
+            '<span class="lcounts">' + counts + '</span><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'lists\')" aria-label="Help" title="Help">?</button></div>' + sortSwitch() + '</div>' +
             (doneCount ? '<div class="toggle lshow"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
               ' onchange="showDone=this.checked; savePrefs(); repick(true)">' +
               '<label for="lShowDone">Show done</label></div>' : '') +
@@ -1294,7 +1349,7 @@
     const st = (k, label) => '<button type="button" class="' + (r.mine === k ? 'on' : '') + '" onclick="rideRsvp(\'' + k + '\')">' + label + '</button>';
     box.innerHTML =
       '<div class="rTop" onclick="rideOpen=!' + open + '; renderRide()"><b>🚴 ' + esc(r.ride.label) + '</b>' +
-        '<span class="rSum">' + esc(time) + ' · ' + ins.length + ' in</span><span class="chev">›</span></div>' +
+        '<span class="rSum">' + esc(time) + ' · ' + ins.length + ' in</span><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'saturday\')" aria-label="Help" title="Help">?</button><span class="chev">›</span></div>' +
       '<div class="rBody">' +
         '<div class="rClass">' + (c.done ? '<span class="done">✓ </span>' : '') + esc(c.title) + '</div>' +
         '<div class="muted">' + esc(c.instructor) + ' · ' + esc(r.program.name) + ', Week ' + r.program.week + '</div>' +
@@ -1709,7 +1764,7 @@
     }
     h += '<div class="bbOpts"><span class="muted bbHint">' + (buddies && picked.size ? 'Riding with ' + picked.size : 'Tap names to pick') + '</span>' +
       '<label class="bbFo"><input type="checkbox"' + (fo ? ' checked' : '') + ' onchange="setFriendsOnly(this.checked)">Friends only</label>' +
-      '<button type="button" class="bbGear" title="Buddy settings" onclick="showTab(\'Settings\', \'setBuddies\')">⚙</button></div></div>';
+      '<button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'buddies\')" aria-label="Help" title="Help">?</button><button type="button" class="bbGear" title="Buddy settings" onclick="showTab(\'Settings\', \'setBuddies\')">⚙</button></div></div>';
     return h;
   }
   function renderBuddyBar() { if (progress && currentTab === 'Progress') renderProgress(); }
@@ -1957,7 +2012,7 @@
       '<div class="pwrTop">' + (times.length > 1
         ? '<select id="powerRide" onchange="loadPowerRide()" title="This class has a twin Peloton\'s export can\'t tell apart: pick your ride">' +
           times.map(t => '<option value="' + t + '">' + esc(when(t)) + '</option>').join('') + '</select>'
-        : '<span>' + esc(when(times[0])) + '</span>') + '</div>' +
+        : '<span>' + esc(when(times[0])) + '</span>') + '<button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'graphs\')" aria-label="Help" title="Help">?</button></div>' +
       '<div id="powerMsg" class="muted pwrMsg">Getting your ride from Strava...</div>' +
       '<canvas id="powerCanvas" class="hidden"></canvas>' +
       '<div class="row" style="margin-top:10px;align-items:center">' +
