@@ -1,5 +1,7 @@
-"""Builds tricks.json: spinzalot's mind tricks for each class, from the interval data in
-sourdoughrides.com's program designer export.
+"""Builds notes.json: ride notes for each class, in the shape of sourdoughrides.com's ride_notes
+(type code + text), so the page reads them the same way once they come from Sean's database.
+Today the only notes are Recommendations (spinzalot's interval tips), worked out from the
+interval data in his program designer export.
 
     python3 tools/make_tricks.py path/to/designer-data.json
 
@@ -63,9 +65,10 @@ def main(path):
             found.sort(key=lambda f: f[1][0])          # in ride order
             classes[c['id']] = found
             multi[len(found)] = multi.get(len(found), 0) + 1
-    out = {'source': 'sourdoughrides.com program designer data', 'snapshot': d.get('snapshot'),
-           'rules': {rid: text for rid, text, _ in RULES}, 'classes': classes}
-    json.dump(out, open('tricks.json', 'w'), separators=(',', ':'))
+    texts = {rid: text for rid, text, _ in RULES}
+    notes = {cid: [{'type': 'recommendation', 'text': texts[rid], 'at': at} for rid, at in found] for cid, found in classes.items()}
+    out = {'source': 'sourdoughrides.com program designer data', 'snapshot': d.get('snapshot'), 'classes': notes}
+    json.dump(out, open('notes.json', 'w'), separators=(',', ':'))
     print('classes with tricks:', len(classes), '| per rule:', counts, '| by number of tricks:', dict(sorted(multi.items())))
 
 if __name__ == '__main__':

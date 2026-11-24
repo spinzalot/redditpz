@@ -60,7 +60,7 @@
     .zs { display:flex; height:5px; border-radius:3px; overflow:hidden; }   /* share of class time in each power zone */
     .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
     .list .zs { height:6px; margin:4px 0 2px; }
-    .grid.cal .brainc { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
+    .grid.cal .notec { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
     .listbar { display:flex; align-items:center; gap:10px; margin:0 0 10px; }
     .sheet.pwr { position:relative; }
     .pwrX { position:absolute; top:8px; right:8px; width:30px; height:30px; padding:0; border-radius:50%; border:0;
@@ -78,7 +78,14 @@
     .sbtn { display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 14px; border-radius:4px; font-size:14px; font-weight:600; }
     .sbtn.discord { background:#5865f2; border-color:#5865f2; color:#fff; }
     .sbtn svg { width:20px; height:20px; }
-    .trick { font-size:14px; color:#5e4b8b; margin:3px 0; }   /* spinzalot's mind tricks */
+    /* Ride notes: one collapsed line per class that opens in place; open or closed is remembered. */
+    .notesLine { font-size:14px; color:#5e4b8b; margin:4px 0; cursor:pointer; user-select:none; }
+    .notesBody { display:none; margin:2px 0 4px; }
+    body.notesOpen .notesBody { display:block; }
+    body.notesOpen .notesLine .chev { display:inline-block; transform:rotate(90deg); }
+    .note { font-size:14px; margin:3px 0; }
+    .note.recommendation { color:#5e4b8b; }
+    .note.warning, .note.taint { color:#9a3412; }
     .grid.cal .dom { position:absolute; top:3px; left:6px; font-size:11px; font-weight:500; color:#8e8e93; }
     .grid.cal .dom.mon { color:var(--ink); font-weight:700; }
     .grid.cal td.today { box-shadow:inset 0 0 0 2px #0a84ff; }
@@ -273,8 +280,13 @@
       </div>
       <div class="card">
         <h3 style="margin-top:0">Display</h3>
-        <div class="toggle"><input type="checkbox" id="sTricks" onchange="toggleTricks(this.checked)">
-          <label for="sTricks" style="margin:0">🧠 Show spinzalot's mind tricks</label></div>
+        <label style="margin:0 0 2px">Ride notes</label>
+        <div class="toggle" style="margin:2px 0"><input type="checkbox" id="nRec" onchange="setNoteType('recommendation', this.checked)">
+          <label for="nRec" style="margin:0">🧠 Recommendations</label></div>
+        <div class="toggle" style="margin:2px 0"><input type="checkbox" id="nInfo" onchange="setNoteType('info', this.checked)">
+          <label for="nInfo" style="margin:0">ℹ️ Info</label></div>
+        <div class="toggle" style="margin:2px 0"><input type="checkbox" checked disabled>
+          <label class="muted" style="margin:0">⚠️ Warnings and data issues (always shown)</label></div>
       </div>
       <div class="card hidden" id="sSignins">
         <h3 style="margin-top:0">Sign-in methods</h3>
@@ -610,7 +622,7 @@
   function loadPrefs() { try { return JSON.parse(localStorage.getItem('rpzPrefs') || '{}'); } catch (e) { return {}; } }
   function savePrefs() {
     const prefs = { challenge: $('cChallenge').value, retired: $('pRetired').checked, programs: $('pPrograms').checked,
-                    showDone: showDone, sortBy: sortBy, sortAsc: sortAsc, picked: [...picked], friendsOnly: $('bFriendsOnly').checked, zones: showZones, tricks: showTricks };
+                    showDone: showDone, sortBy: sortBy, sortAsc: sortAsc, picked: [...picked], friendsOnly: $('bFriendsOnly').checked, zones: showZones, noteTypes: noteTypes, notesOpen: notesOpen };
     try { localStorage.setItem('rpzPrefs', JSON.stringify(prefs)); } catch (e) {}
   }
   function applyPrefs() {
@@ -625,8 +637,10 @@
     (p.picked || []).forEach(u => picked.add(u));
     $('bFriendsOnly').checked = p.friendsOnly === true;
     showZones = p.zones === true;
-    showTricks = p.tricks !== false;   // on unless turned off
-    $('sTricks').checked = showTricks;
+    noteTypes = Object.assign({ recommendation: p.tricks !== false, info: true }, p.noteTypes || {});
+    notesOpen = p.notesOpen === true;
+    document.body.classList.toggle('notesOpen', notesOpen);
+    $('nRec').checked = noteTypes.recommendation; $('nInfo').checked = noteTypes.info;
   }
 
   const WIDE = matchMedia('(min-width: 900px), (orientation: landscape) and (min-width: 600px)');
@@ -734,22 +748,48 @@
   }
 
   // spinzalot's mind tricks: worked out ahead of time from each class's intervals (tools/make_tricks.py).
-  let TRICKS = null, showTricks = true;
-  function toggleTricks(on) { showTricks = on; savePrefs(); if (progress) renderProgress(); if (buddies) renderBuddies(); }
-  fetch('tricks.json').then(r => r.ok ? r.json() : null).then(j => {
+  // ----- Ride notes -----
+  // Shaped like sourdoughrides.com's ride_notes (a type code + text, optionally where in the ride), so notes
+  // from Sean's database slot in later through notesFor() without touching the screens. Today the only
+  // source is notes.json (Recommendations, from tools/make_tricks.py).
+  const NOTE_TYPES = {   // Sean's note_types codes; lower rank = more important (that icon wins on a tile)
+    taint:          { icon: '⚠️', label: 'Data issue',     rank: 0, always: true },
+    warning:        { icon: '⚠️', label: 'Warning',        rank: 1, always: true },
+    info:           { icon: 'ℹ️', label: 'Info',           rank: 2 },
+    recommendation: { icon: '🧠', label: 'Recommendation', rank: 3 },
+  };
+  let NOTES = {}, noteTypes = { recommendation: true, info: true }, notesOpen = false;
+  fetch('notes.json').then(r => r.ok ? r.json() : null).then(j => {
     if (!j || !j.classes) return;
-    TRICKS = j;
+    NOTES = j.classes;
     if (progress && currentTab === 'Progress') renderProgress();
     if (buddies && currentTab === 'Buddies') renderBuddies();
   }).catch(() => {});
-  const clockAt = sec => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
-  const brain = c => showTricks && TRICKS && TRICKS.classes[c.id] ? ' <span title="spinzalot mind trick">🧠</span>' : '';
-  function trickLines(c) {
-    const list = showTricks && TRICKS && TRICKS.classes[c.id];
-    if (!list) return '';
-    return list.map(([rid, at]) => '<div class="trick">🧠 ' + esc(TRICKS.rules[rid] || '') +
-      ' <span class="muted">(' + (at.length > 1 ? 'at ' : 'from ') + at.map(clockAt).join(', ') + ')</span></div>').join('');
+  /** The notes a rider sees for a class, most important first, then in ride order. */
+  function notesFor(id) {
+    return (NOTES[id] || []).filter(n => NOTE_TYPES[n.type] && (NOTE_TYPES[n.type].always || noteTypes[n.type] !== false))
+      .sort((a, b) => (NOTE_TYPES[a.type].rank - NOTE_TYPES[b.type].rank) || (((a.at || [])[0] || 0) - ((b.at || [])[0] || 0)));
   }
+  /** Tile corner: the icon of the most important note on any of the tile's classes. */
+  function noteIcon(classes) {
+    let best = null;
+    classes.forEach(c => notesFor(c.id).forEach(n => { if (!best || NOTE_TYPES[n.type].rank < NOTE_TYPES[best].rank) best = n.type; }));
+    return best ? '<span class="notec" title="' + NOTE_TYPES[best].label + '">' + NOTE_TYPES[best].icon + '</span>' : '';
+  }
+  const clockAt = sec => Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  /** Class details: "📝 Notes: ⚠️ 1 · 🧠 2 ›", opening in place to the notes themselves. */
+  function notesBlock(c) {
+    const list = notesFor(c.id);
+    if (!list.length) return '';
+    const counts = [];
+    list.forEach(n => { const k = NOTE_TYPES[n.type].icon; const e = counts.find(x => x[0] === k); if (e) e[1]++; else counts.push([k, 1]); });
+    return '<div class="notesLine" onclick="toggleNotes()">📝 Notes: ' + counts.map(x => x[0] + ' ' + x[1]).join(' · ') + ' <span class="chev">›</span></div>' +
+      '<div class="notesBody">' + list.map(n => '<div class="note ' + n.type + '">' + NOTE_TYPES[n.type].icon + ' ' + esc(n.text) +
+        (n.at && n.at.length ? ' <span class="muted">(' + (n.at.length > 1 ? 'at ' : 'from ') + n.at.map(clockAt).join(', ') + ')</span>' : '') +
+        '</div>').join('') + '</div>';
+  }
+  function toggleNotes() { notesOpen = !notesOpen; document.body.classList.toggle('notesOpen', notesOpen); savePrefs(); }
+  function setNoteType(type, on) { noteTypes[type] = on; savePrefs(); if (progress) renderProgress(); if (buddies) renderBuddies(); }
 
   // Title row: score on the left, the Zones switch on the right (same line).
   function titleRow(p, pct) {
@@ -813,7 +853,7 @@
         h += '<td class="cell' + (done ? (manual ? ' complete manual' : ' complete') : (other ? ' other' : '')) + (selCell === key ? ' sel' : '') + (cn.today ? ' today' : '') +
              '" data-week="' + w + '" data-slot="' + esc(d) + '" onclick="pickSlot(' + w + ',\'' + esc(d) + '\')">' +
              cn.html + (done ? '✓' : other ? '↺' : '<span class="muted" style="font-size:13px">' + cs.map(c => esc(shortLabel(c))).join(' ') + '</span>') +
-             (showTricks && TRICKS && cs.some(c => TRICKS.classes[c.id]) ? '<span class="brainc" title="spinzalot mind trick">🧠</span>' : '') +
+             noteIcon(cs) +
              zoneStrip(cs) + '</td>';
       });
       h += '</tr>';
@@ -864,9 +904,9 @@
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') :
-                                                         (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + brain(c) + '</div>' + zoneStrip([c]) +
+                                                         (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + 'Aired ' + aired + (c.manual ? ' · marked done by you' : '') + '</div>' +
-           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + trickLines(c) +
+           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + notesBlock(c) +
            '<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
            ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">' +
            classButtons(c) +
@@ -941,10 +981,10 @@
     h += '<div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + brain(c) + '</div>' + zoneStrip([c]) +
+      h += '<div class="item"><div class="title">' + (c.done ? '<span class="done">✓ </span>' : (c.otherAt ? '<span style="color:#43a047">↺ </span>' : '')) + esc(c.title) + '</div>' + zoneStrip([c]) +
            '<div class="muted">' + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + (c.retired ? ' · retired' : '') +
              (c.done && c.rodeAt ? ' · Ridden ' + new Date(c.rodeAt * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '') + '</div>' +
-           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + trickLines(c) +
+           (!c.done && c.otherAt ? '<div class="muted">' + esc(otherLine(c)) + '</div>' : '') + notesBlock(c) +
            ('<img loading="lazy" alt="Ride profile" src="' + PROFILE_IMG(c.id) + '" onerror="this.remove()"' +
                           ' data-cap="' + esc(c.title + ' · ' + aired) + '" onclick="zoomImg(this)">') +
            classButtons(c) +
@@ -1142,8 +1182,8 @@
     shown.forEach((c, i) => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item">' + (isProgram && c.week ? '<div class="muted"><b>' + weekLabel(ch, c.week, c.slot) + '</b></div>' : '') +
-           '<div class="title">' + esc(c.title) + brain(c) + '</div>' + zoneStrip([c]) +
-           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + '</div>' + trickLines(c) +
+           '<div class="title">' + esc(c.title) + '</div>' + zoneStrip([c]) +
+           '<div class="muted">' + (c.instructor ? esc(c.instructor) + ' · ' : '') + (c.program ? 'Peloton program ride · released ' : 'Aired ') + aired + '</div>' + notesBlock(c) +
            (b.riders.length ? '<div style="margin-top:4px">' + (names(c).length
               ? '👥 Also needs it: ' + names(c).map(esc).join(', ') +
                 (friendsOnly && c.buddies.length > names(c).length ? ' <span class="muted">(+' + (c.buddies.length - names(c).length) + ' others)</span>' : '')
