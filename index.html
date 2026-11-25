@@ -148,6 +148,13 @@
       body.sr header .who br, body.sr #signOutBtn { display:none; }
       body.sr .who.in ~ #gearBtn::after { display:none; }
     }
+    /* Sean's pages inside our UI */
+    body.siteView main { max-width:none; padding:0; }
+    .siteBar { display:flex; align-items:center; gap:10px; padding:6px 14px; font-size:13px; background:#fff; border-bottom:1px solid #e0e0e0; }
+    .siteBar span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .siteBar a { margin-left:auto; white-space:nowrap; color:#0d9488; }
+    #siteFrame { display:block; width:100%; border:0; background:#fff;
+                 height:calc(100vh - var(--hdrH, 48px) - 31px); height:calc(100dvh - var(--hdrH, 48px) - 31px); }
     /* Help: ? buttons and the Help screen */
     .hq { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; padding:0; margin:0 0 0 6px;
           border-radius:50%; border:1.5px solid #8e8e93; background:#fff; color:#636366; font-size:12px; font-weight:700; line-height:1;
@@ -335,9 +342,9 @@
 <header>
   <!-- sourdoughrides look (?look=sr): ☰ menu on phones, Sean's links on wide screens -->
   <button type="button" class="srOnly gear" id="srMenuBtn" onclick="toggleSrMenu(event)" aria-label="Menu" title="Menu">☰</button>
-  <nav class="srOnly srLinks"><a class="brand" href="https://sourdoughrides.com/">Sourdoughrides</a><a href="https://sourdoughrides.com/programs">Programs</a><a href="https://sourdoughrides.com/bingo">Bingo</a><a class="on" aria-current="page">Challenges</a></nav>
+  <nav class="srOnly srLinks"><a class="brand" data-site="home" href="https://sourdoughrides.com/" onclick="return goSite(this)">Sourdoughrides</a><a data-site="programs" href="https://sourdoughrides.com/programs" onclick="return goSite(this)">Programs</a><a data-site="bingo" href="https://sourdoughrides.com/bingo" onclick="return goSite(this)">Bingo</a><a class="on" data-site="challenges" href="?" onclick="return goSite(this)">Challenges</a></nav>
   <div id="srMenu" class="srMenu hidden">
-    <a class="brand" href="https://sourdoughrides.com/">Sourdoughrides</a><a href="https://sourdoughrides.com/programs">Programs</a><a href="https://sourdoughrides.com/bingo">Bingo</a><a class="on">Challenges</a>
+    <a class="brand" data-site="home" href="https://sourdoughrides.com/" onclick="return goSite(this)">Sourdoughrides</a><a data-site="programs" href="https://sourdoughrides.com/programs" onclick="return goSite(this)">Programs</a><a data-site="bingo" href="https://sourdoughrides.com/bingo" onclick="return goSite(this)">Bingo</a><a class="on" data-site="challenges" href="?" onclick="return goSite(this)">Challenges</a>
     <div class="srMenuWho" id="srMenuWho"></div>
   </div>
   <h1>RedditPZ Challenges<button type="button" class="hq hqTitle" onclick="openHelp()" aria-label="Help" title="Help">?</button></h1>
@@ -434,6 +441,13 @@
         <p class="muted" id="sLast"></p>
         <details id="sDetails" class="muted hidden"><summary>Technical details of the last sync</summary><pre id="sOut"></pre></details>
       </div>
+    </div>
+
+    <!-- sourdoughrides.com pages, shown under our header (sr look) -->
+    <div id="pSite" class="hidden">
+      <div class="siteBar"><span id="siteWhere" class="muted"></span>
+        <a id="siteOpen" href="https://sourdoughrides.com/" target="_blank" rel="noopener">Open in new tab ↗</a></div>
+      <iframe id="siteFrame" title="sourdoughrides.com" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
 
     <div id="pHelp" class="hidden">
@@ -820,6 +834,7 @@
     } catch (e) { $('chooseMsg').textContent = e.message || String(e); $('chooseSave').disabled = false; }
   }
   function challengeChanged() {
+    if (currentTab === 'Site') { showTab('Progress'); }   // picking a challenge from Sean's pages comes back to it
     if ($('cChallenge').value === CHOOSE) { $('cChallenge').value = lastChallenge; openChooser(); return; }
     lastChallenge = $('cChallenge').value;
     savePrefs();
@@ -865,7 +880,9 @@
     if (name !== 'Settings' && name !== 'Sync' && name !== 'Help') lastTab = name;
     currentTab = name;
     document.body.classList.toggle('wideProgress', name === 'Progress');
-    ['Progress', 'Buddies', 'Sync', 'Settings', 'Help'].forEach(n => {
+    document.body.classList.toggle('siteView', name === 'Site');
+    if (name !== 'Site') markSite('challenges');
+    ['Progress', 'Buddies', 'Sync', 'Settings', 'Help', 'Site'].forEach(n => {
       $('p' + n).classList.toggle('hidden', n !== name);
       if ($('t' + n)) $('t' + n).classList.toggle('on', n === name);
     });
@@ -908,8 +925,8 @@
   function closeHelp() { helpFrom === 'Settings' ? showTab('Settings') : helpFrom === 'Sync' ? showTab('Sync') : showTab(helpFrom); }
   function showTabPlain(name) {   // switch screens without the per-screen loading showTab does
     currentTab = name;
-    document.body.classList.remove('wideProgress');
-    ['Progress', 'Buddies', 'Sync', 'Settings', 'Help'].forEach(n => {
+    document.body.classList.remove('wideProgress', 'siteView');
+    ['Progress', 'Buddies', 'Sync', 'Settings', 'Help', 'Site'].forEach(n => {
       $('p' + n).classList.toggle('hidden', n !== name);
       if ($('t' + n)) $('t' + n).classList.toggle('on', n === name);
     });
@@ -927,6 +944,25 @@
     let look = ''; try { look = localStorage.getItem('rpzLook') || ''; } catch (e) {}
     if (look === 'sr') document.body.classList.add('sr');
   })();
+  // Sean's pages (Sourdoughrides, Programs, Bingo) open inside our UI, under our header, in a frame;
+  // "Challenges" comes back to Progress. "Open in new tab" is always there in case his site can't be framed.
+  const SITE = { home: 'https://sourdoughrides.com/', programs: 'https://sourdoughrides.com/programs', bingo: 'https://sourdoughrides.com/bingo' };
+  function markSite(key) {
+    document.querySelectorAll('[data-site]').forEach(a => a.classList.toggle('on', a.dataset.site === key));
+  }
+  function goSite(a) {
+    if (!document.body.classList.contains('sr')) return true;   // classic look: an ordinary link
+    $('srMenu').classList.add('hidden');
+    const key = a.dataset.site;
+    if (key === 'challenges') { showTab(lastTab === 'Site' ? 'Progress' : lastTab); return false; }
+    const url = SITE[key], f = $('siteFrame');
+    if (f.getAttribute('src') !== url) f.setAttribute('src', url);
+    $('siteWhere').textContent = url.replace('https://', '');
+    $('siteOpen').href = url;
+    document.body.classList.remove('hdrHidden'); document.documentElement.style.setProperty('--hdrTop', '');
+    showTab('Site'); markSite(key);
+    return false;
+  }
   function toggleSrMenu(ev) {
     ev.stopPropagation();
     const m = $('srMenu'), open = m.classList.contains('hidden');
@@ -1132,7 +1168,7 @@
       otherNote(p) + '</div><div class="seg tshow">' +
       (cal && ZONES ? '<button type="button" class="' + (zonesOn ? 'on' : '') + '" title="Each class\'s time in each power zone" onclick="tileMode(\'zones\')">' + legend + 'Zones</button>' : '') +
       '<button type="button" class="' + (buddyOn ? 'on' : '') + '" title="Who else still needs each class" onclick="tileMode(\'buddies\')">👥<span class="tlab"> Buddies</span></button>' +
-      '</div><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'tiles\')" aria-label="Help" title="Help">?</button></div>';
+      '</div></div>';
   }
   function tileMode(m) {
     if (m === 'zones') {
@@ -1167,7 +1203,7 @@
       .sort((a, b) => (DAY_ORDER.indexOf(a) + 1 || 99) - (DAY_ORDER.indexOf(b) + 1 || 99) || String(a).localeCompare(String(b)));
     let h = titleRow(p, pct, true) +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' + buddyRow() +
-            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a day, week or weekday to see classes.' + (p.other ? ' ↺ = done outside window.' : '') + '</div>';
+            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a day, week or weekday to see classes.' + (p.other ? ' ↺ = done outside window.' : '') + '<button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'tiles\')" aria-label="Help" title="Help">?</button></div>';
     const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
     const todayKey = new Date().toDateString();
     let lastMonth = -1;
@@ -1264,7 +1300,7 @@
     p.types = p.types.slice().sort((a, b) => typeRank(a) - typeRank(b));
     let h = titleRow(p, pct, false) +
             '<div class="bar"><div style="width:' + pct + '%"></div></div>' + buddyRow() +
-            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a cell, row or column to see its classes.</div>';
+            '<div class="muted">' + (p.total - p.done) + ' to go. Tap a cell, row or column to see its classes.<button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'tiles\')" aria-label="Help" title="Help">?</button></div>';
     const hd = (key, label, tip) => '<th class="pick' + (selCell === key ? ' sel' : '') + '" title="' + tip + '" onclick="pickGroup(\'' + key + '\')">' + label + '</th>';
     h += '<table class="grid"><tr>' + hd('ALL', 'min', 'All classes') + p.types.map(t => hd('T:' + t, esc(TYPE_SHORT[t] || t), 'All ' + esc(t) + ' classes')).join('') + '</tr>';
     p.lengths.forEach(len => {
