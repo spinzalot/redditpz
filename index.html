@@ -152,7 +152,8 @@
     body.siteView main { max-width:none; padding:0; }
     .siteBar { display:flex; align-items:center; gap:10px; padding:6px 14px; font-size:13px; background:#fff; border-bottom:1px solid #e0e0e0; }
     .siteBar span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .siteBar a { margin-left:auto; white-space:nowrap; color:#0d9488; }
+    .siteBar .siteHint { margin-left:auto; }
+    .siteBar a { white-space:nowrap; color:#0d9488; }
     #siteFrame { display:block; width:100%; border:0; background:#fff;
                  height:calc(100vh - var(--hdrH, 48px) - 31px); height:calc(100dvh - var(--hdrH, 48px) - 31px); }
     /* Help: ? buttons and the Help screen */
@@ -446,6 +447,7 @@
     <!-- sourdoughrides.com pages, shown under our header (sr look) -->
     <div id="pSite" class="hidden">
       <div class="siteBar"><span id="siteWhere" class="muted"></span>
+        <span class="muted siteHint">Blank? It can't show here yet:</span>
         <a id="siteOpen" href="https://sourdoughrides.com/" target="_blank" rel="noopener">Open in new tab ↗</a></div>
       <iframe id="siteFrame" title="sourdoughrides.com" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
