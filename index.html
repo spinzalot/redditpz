@@ -704,6 +704,8 @@
     checkSyncPrompt();
     loadRide();
     showTab(me.rider.lastSync ? 'Progress' : 'Sync');
+    const helpAt = new URLSearchParams(location.search).get('help');   // ?help=download opens Help at that topic
+    if (helpAt !== null) openHelp(helpAt.replace(/^h-/, '') || undefined);
     prefetch();
   }
   // Loads whichever tab isn't cached yet for the current challenge, quietly in the background.

@@ -168,5 +168,15 @@
 
 </div>
 </main>
+<script>
+  // help.html#download (or #h-download) opens that topic. Only runs when this page is opened directly.
+  function openFromHash() {
+    const k = decodeURIComponent(location.hash.slice(1)); if (!k) return;
+    const d = document.getElementById(k.indexOf('h-') === 0 ? k : 'h-' + k); if (!d) return;
+    document.querySelectorAll('details[open]').forEach(x => { if (x !== d) x.open = false; });
+    d.open = true; d.scrollIntoView({ block: 'start' });
+  }
+  openFromHash(); window.addEventListener('hashchange', openFromHash);
+</script>
 </body>
 </html>
