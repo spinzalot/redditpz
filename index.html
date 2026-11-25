@@ -110,6 +110,44 @@
     .grid.cal .zs { position:absolute; left:3px; right:3px; bottom:3px; height:5px; border-radius:0 0 5px 5px; }
     .list .zs { height:6px; margin:4px 0 2px; }
     .grid.cal .notec { position:absolute; top:2px; right:4px; font-size:11px; line-height:1; }
+    /* ===== sourdoughrides look (?look=sr): Sean's colors and links, one slim bar ===== */
+    body:not(.sr) .srOnly, .srMenu { display:none !important; }
+    body.sr .srMenu:not(.hidden) { display:block !important; }
+    body.sr { --accent:#0d9488; --bg:#f5f5f5; --ink:#333; background:var(--bg); color:var(--ink); }
+    body.sr main a:not(.btn) { color:#0d9488; }
+    body.sr header { flex-wrap:nowrap; gap:8px; padding:6px 10px; min-height:48px; box-sizing:border-box; transition:transform .2s ease; }
+    body.sr.hdrHidden header { transform:translateY(-100%); }
+    body.sr header h1 { display:none; }
+    body.sr #srMenuBtn { display:flex; font-size:18px; font-weight:700; }
+    body.sr .srLinks { display:none; }   /* phones: these live in the ☰ menu */
+    body.sr #chalBox { order:2; flex:1 1 auto; min-width:0; max-width:380px; margin:0; }
+    body.sr #chalBox select { border:none; background-color:transparent; font-size:17px; font-weight:700; padding:6px 2px; color:var(--ink);
+                              text-overflow:ellipsis; width:100%; }
+    body.sr #cSingle b { font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    body.sr .hdrR { order:3; gap:6px; flex:0 0 auto; }
+    body.sr header .gear { width:34px; height:34px; }
+    body.sr #srHelp { display:flex; font-weight:700; font-size:15px; }
+    body.sr header .who { display:none; }
+    body.sr .who.in ~ #gearBtn::after { content:''; position:absolute; top:0; right:0; width:9px; height:9px; border-radius:50%;
+                                        background:#16a34a; border:2px solid #fff; }   /* signed in (phones) */
+    body.sr .srMenu:not(.hidden) { position:absolute; top:calc(100% + 4px); left:8px; z-index:30; background:#fff;
+      border:1px solid #e0e0e0; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.12); padding:6px 0; min-width:220px; }
+    .srMenu a { display:block; padding:10px 16px; color:var(--ink); text-decoration:none; font-size:16px; }
+    .srMenu a.brand { color:#0d9488; font-weight:700; }
+    .srMenu a.on { color:#0d9488; font-weight:600; }
+    .srMenuWho { border-top:1px solid #e0e0e0; margin-top:6px; padding:10px 16px 4px; font-size:14px; color:var(--muted); }
+    .srMenuWho button { margin-top:8px; font-size:13px; padding:5px 12px; }
+    @media (min-width: 900px), (orientation: landscape) and (min-width: 600px) {
+      body.sr #srMenuBtn { display:none; }
+      body.sr .srLinks { display:flex; align-items:center; gap:16px; order:1; flex:0 0 auto; font-size:15px; }
+      .srLinks a { color:var(--ink); text-decoration:none; }
+      .srLinks a.brand { color:#0d9488; font-weight:600; }
+      .srLinks a.on { color:#0d9488; font-weight:600; border-bottom:2px solid #0d9488; padding-bottom:2px; }
+      body.sr #chalBox { margin:0 8px 0 12px; padding-left:12px; border-left:1px solid #e0e0e0; }
+      body.sr header .who { display:block; }
+      body.sr header .who br, body.sr #signOutBtn { display:none; }
+      body.sr .who.in ~ #gearBtn::after { display:none; }
+    }
     /* Help: ? buttons and the Help screen */
     .hq { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; padding:0; margin:0 0 0 6px;
           border-radius:50%; border:1.5px solid #8e8e93; background:#fff; color:#636366; font-size:12px; font-weight:700; line-height:1;
@@ -127,7 +165,7 @@
     /* Settings */
     /* Help / Settings / Sync title bar: pinned under the app header so ✕ is always in reach. */
     .setHead { display:flex; align-items:center; justify-content:space-between; margin:0 -16px 8px; padding:8px 16px;
-               position:sticky; top:var(--hdrH, 64px); z-index:5; background:var(--bg, #f5f5f7); }
+               position:sticky; top:var(--hdrTop, var(--hdrH, 64px)); z-index:5; background:var(--bg, #f5f5f7); }
     .setHead h2 { margin:0; font-size:20px; }
     .setX { width:36px; height:36px; padding:0; border-radius:50%; font-size:16px; }
     details.card.set { padding:0; }
@@ -295,6 +333,13 @@
 </head>
 <body>
 <header>
+  <!-- sourdoughrides look (?look=sr): ☰ menu on phones, Sean's links on wide screens -->
+  <button type="button" class="srOnly gear" id="srMenuBtn" onclick="toggleSrMenu(event)" aria-label="Menu" title="Menu">☰</button>
+  <nav class="srOnly srLinks"><a class="brand" href="https://sourdoughrides.com/">Sourdoughrides</a><a href="https://sourdoughrides.com/programs">Programs</a><a href="https://sourdoughrides.com/bingo">Bingo</a><a class="on" aria-current="page">Challenges</a></nav>
+  <div id="srMenu" class="srMenu hidden">
+    <a class="brand" href="https://sourdoughrides.com/">Sourdoughrides</a><a href="https://sourdoughrides.com/programs">Programs</a><a href="https://sourdoughrides.com/bingo">Bingo</a><a class="on">Challenges</a>
+    <div class="srMenuWho" id="srMenuWho"></div>
+  </div>
   <h1>RedditPZ Challenges<button type="button" class="hq hqTitle" onclick="openHelp()" aria-label="Help" title="Help">?</button></h1>
   <!-- Challenge picker: beside the title in landscape and on wide screens, on its own row below it in portrait. -->
   <div id="chalBox" class="hidden">
@@ -308,6 +353,7 @@
     <div class="who" id="who"><span id="whoState">Not signed in</span><br><button class="hidden" id="signOutBtn" onclick="signOut()">Sign out</button></div>
     <button type="button" class="gear hidden" id="syncIcon" onclick="syncClick(event)" title="Sync (long-press or right-click for options)" aria-label="Sync"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.3 4.9"/><path d="M4 12a8 8 0 0 1 14.3-4.9"/><path d="M18.6 3v4.2h-4.2"/><path d="M5.4 21v-4.2h4.2"/></svg><span class="dot hidden" id="syncDot"></span></button>
     <input type="file" id="syncPick" accept=".csv,text/csv" class="hidden" onchange="syncPicked(this)">
+    <button type="button" class="srOnly gear" id="srHelp" onclick="openHelp()" aria-label="Help" title="Help">?</button>
     <button type="button" class="gear hidden" id="gearBtn" onclick="currentTab === 'Settings' ? closeSettings() : showTab('Settings')" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </div>
@@ -873,6 +919,43 @@
     closePower(); closeWhen();
   }
   if (!new URLSearchParams(location.search).has('tabs')) $('tabBar').classList.add('hidden');
+
+  // ----- sourdoughrides look: ?look=sr turns it on (remembered on this device), ?look=classic turns it off -----
+  (function () {
+    const want = new URLSearchParams(location.search).get('look');
+    try { if (want) localStorage.setItem('rpzLook', want === 'sr' ? 'sr' : 'classic'); } catch (e) {}
+    let look = ''; try { look = localStorage.getItem('rpzLook') || ''; } catch (e) {}
+    if (look === 'sr') document.body.classList.add('sr');
+  })();
+  function toggleSrMenu(ev) {
+    ev.stopPropagation();
+    const m = $('srMenu'), open = m.classList.contains('hidden');
+    if (open) {
+      const inn = $('who').classList.contains('in');
+      $('srMenuWho').innerHTML = inn ? 'Signed in as <b>' + esc($('whoState').textContent) + '</b><br><button type="button" onclick="signOut()">Sign out</button>'
+                                     : 'Not signed in';
+    }
+    m.classList.toggle('hidden', !open);
+  }
+  document.addEventListener('click', e => { const m = $('srMenu'); if (m && !m.classList.contains('hidden') && !m.contains(e.target)) m.classList.add('hidden'); });
+  // Phones: the bar slides away while scrolling down and comes back on any scroll up.
+  (function () {
+    const wide = matchMedia('(min-width: 900px), (orientation: landscape) and (min-width: 600px)');
+    let lastY = scrollY;
+    addEventListener('scroll', () => {
+      const y = scrollY, sr = document.body.classList.contains('sr');
+      let hide = document.body.classList.contains('hdrHidden');
+      if (!sr || wide.matches || y < 60) hide = false;
+      else if (y > lastY + 6) hide = true;
+      else if (y < lastY - 6) hide = false;
+      if (Math.abs(y - lastY) > 6 || y < 60) lastY = y;
+      if (hide !== document.body.classList.contains('hdrHidden')) {
+        document.body.classList.toggle('hdrHidden', hide);
+        document.documentElement.style.setProperty('--hdrTop', hide ? '0px' : '');
+        if (hide) $('srMenu').classList.add('hidden');
+      }
+    }, { passive: true });
+  })();
   // Settings sections: one open at a time; each collapsed row says what's set inside it.
   function setToggled(d) {
     if (d.open) document.querySelectorAll('#pSettings > details[open]').forEach(o => { if (o !== d) o.open = false; });
