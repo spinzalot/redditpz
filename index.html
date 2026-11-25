@@ -148,7 +148,9 @@
     /* Saturday ride card */
     #pRide .rTop { display:flex; align-items:center; gap:8px; cursor:pointer; }
     #pRide .rTop b { white-space:nowrap; }
-    #pRide .rSum { color:var(--muted); font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+    #pRide .rSum { color:var(--muted); font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto; }
+    #pRide .rTop .hq { margin-left:2px; }
+    #pRide .rTop .chev { margin-left:auto; }
     #pRide .rTop .chev { color:var(--muted); font-size:20px; line-height:1; transition:transform .15s; }
     #pRide.open .rTop .chev { transform:rotate(90deg); }
     #pRide .rBody { display:none; margin-top:8px; }
@@ -390,16 +392,16 @@
     </div>
 
     <div id="pSettings" class="hidden">
-      <div class="setHead"><h2>Settings</h2><button type="button" class="setX" onclick="closeSettings()" aria-label="Close settings">✕</button></div>
+      <div class="setHead"><h2>Settings<button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('settings')" aria-label="Help" title="Help">?</button></h2><button type="button" class="setX" onclick="closeSettings()" aria-label="Close settings">✕</button></div>
       <details class="card set" name="settings" id="setClasses" ontoggle="setToggled(this)">
-        <summary><h3>Classes</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('settings')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumClasses"></span></summary>
+        <summary><h3>Classes</h3><span class="setSum" id="sumClasses"></span></summary>
         <div class="setBody">
         <div class="toggle"><input type="checkbox" id="pRetired" onchange="filtersChanged()"><label for="pRetired">Show retired classes I've done</label></div>
         <div class="toggle"><input type="checkbox" id="pPrograms" checked onchange="filtersChanged()"><label for="pPrograms">Show Peloton program rides</label></div>
         </div>
       </details>
       <details class="card set" name="settings" id="setNotes" ontoggle="setToggled(this)">
-        <summary><h3>Ride notes</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('notes')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumNotes"></span></summary>
+        <summary><h3>Ride notes</h3><span class="setSum" id="sumNotes"></span></summary>
         <div class="setBody">
         <div class="toggle"><input type="checkbox" id="nRec" onchange="setNoteType('recommendation', this.checked)"><label for="nRec">🧠 Recommendations</label></div>
         <div class="toggle"><input type="checkbox" id="nInfo" onchange="setNoteType('info', this.checked)"><label for="nInfo">ℹ️ Info</label></div>
@@ -407,7 +409,7 @@
         </div>
       </details>
       <details class="card set" name="settings" id="setBuddies" ontoggle="setToggled(this)">
-        <summary><h3>Buddies</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('buddies')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumBuddies"></span></summary>
+        <summary><h3>Buddies</h3><span class="setSum" id="sumBuddies"></span></summary>
         <div class="setBody">
         <div class="setSub">Who can see me</div>
         <div class="row" style="gap:16px;margin:2px 0 10px">
@@ -434,14 +436,14 @@
         </div>
       </details>
       <details class="card set" name="settings" id="sStrava" ontoggle="setToggled(this)">
-        <summary><h3>Strava</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('graphs')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumStrava"></span></summary>
+        <summary><h3>Strava</h3><span class="setSum" id="sumStrava"></span></summary>
         <div class="setBody">
         <p class="muted" style="margin:0 0 6px">Your power on ride graphs. Only you see it. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
         <div id="sStravaBody"></div>
         </div>
       </details>
       <details class="card set" name="settings" id="setAccount" ontoggle="setToggled(this)">
-        <summary><h3>Account</h3><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp('start')" aria-label="Help" title="Help">?</button><span class="setSum" id="sumAccount"></span></summary>
+        <summary><h3>Account</h3><span class="setSum" id="sumAccount"></span></summary>
         <div class="setBody">
         <div class="setRow"><span class="muted" style="font-size:14px">Signed in as <b id="setName"></b></span><button onclick="signOut()">Sign out</button></div>
         <div id="sSignins" class="hidden"><div class="setSub">Sign in with</div><div id="sSigninsBody"></div></div>
@@ -1149,7 +1151,8 @@
     selCell = 'w' + week + '|' + slot; renderProgramGrid();
     const cs = progress.classes.filter(c => c.week === week && c.slot === slot);
     const ch = me.challenges.find(c => c.id === $('cChallenge').value) || {};
-    let h = '<h3 style="margin-top:0">' + weekLabel(ch, week, slot) + '</h3><div class="list">';
+    let h = '<h3 style="margin-top:0;display:flex;align-items:center">' + weekLabel(ch, week, slot) +
+            '<button type="button" class="hq" onclick="openHelp(\'lists\')" aria-label="Help" title="Help">?</button></h3><div class="list">';
     cs.forEach(c => {
       const aired = new Date(c.air * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       h += '<div class="item"><div class="title">' + (c.done ? (c.manual ? '<span class="muted">✓ </span>' : '<span class="done">✓ </span>') :
