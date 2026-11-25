@@ -169,8 +169,10 @@
     .listhead .lcounts { font-size:14px; white-space:nowrap; display:flex; gap:6px; align-items:center; }
     .listhead .lcDone { color:var(--done); font-weight:700; }
     .listhead > :last-child { margin-left:auto; }
-    .lshow { margin:-4px 0 10px; }
+    .lshow { display:flex; align-items:center; margin:-4px 0 10px; }
+    .lshow .toggle { margin:0; }
     .lshow label { margin:0; font-size:13px; }
+    .lshow .hq { margin-left:auto; }
     .sheet.pwr { position:relative; }
     .pwrX { position:absolute; top:8px; right:8px; width:30px; height:30px; padding:0; border-radius:50%; border:0;
             background:#f2f2f7; color:#636366; font-size:15px; line-height:30px; }
@@ -1287,10 +1289,11 @@
       : (doneCount ? '<span class="lcDone">' + doneCount + ' ✓</span><span class="muted">·</span>' : '') +
         '<span>' + (left === 1 ? 'Just 1 left!' : left + ' left!') + '</span>';
     let h = '<div class="listhead"><div class="ltitle"><h3>' + title + '</h3>' +
-            '<span class="lcounts">' + counts + '</span><button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'lists\')" aria-label="Help" title="Help">?</button></div>' + sortSwitch() + '</div>' +
-            (doneCount ? '<div class="toggle lshow"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
+            '<span class="lcounts">' + counts + '</span></div>' + sortSwitch() + '</div>' +
+            // Second line: Show done on the left, the ? on the right (the top line has no room to spare on phones).
+            '<div class="lshow">' + (doneCount ? '<div class="toggle"><input type="checkbox" id="lShowDone"' + (showDone ? ' checked' : '') +
               ' onchange="showDone=this.checked; savePrefs(); repick(true)">' +
-              '<label for="lShowDone">Show done</label></div>' : '') +
+              '<label for="lShowDone">Show done</label></div>' : '') + '<button type="button" class="hq" onclick="event.stopPropagation(); event.preventDefault(); openHelp(\'lists\')" aria-label="Help" title="Help">?</button></div>' +
             (orderNote ? '<div class="muted" style="font-size:13px;margin:-4px 0 8px">' + esc(orderNote) + '</div>' : '');
     if (!cs.length) h += '<p class="muted">All done here! 🎉</p>';
     h += '<div class="list">';
